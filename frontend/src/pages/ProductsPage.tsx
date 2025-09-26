@@ -123,10 +123,10 @@ const ProductsPage: React.FC = () => {
       {/* Header */}
       <Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Products
+          Textile Dead Stock Marketplace
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Discover textile materials from verified suppliers worldwide
+          Discover premium textile materials from verified suppliers. Find fabrics by weight, composition, certifications (OEKO-TEX, GOTS), and technical specifications.
         </Typography>
       </Box>
 
@@ -138,7 +138,7 @@ const ProductsPage: React.FC = () => {
             <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
-                placeholder="Search products..."
+                placeholder="Search by fabric type, weight, composition, certifications..."
                 value={searchQuery}
                 onChange={handleSearch}
                 InputProps={{
@@ -159,10 +159,13 @@ const ProductsPage: React.FC = () => {
                   label="Category"
                 >
                   <MenuItem value="">All Categories</MenuItem>
-                  <MenuItem value="cotton">Cotton</MenuItem>
-                  <MenuItem value="polyester">Polyester</MenuItem>
-                  <MenuItem value="yarn">Yarn</MenuItem>
-                  <MenuItem value="fabric">Fabric</MenuItem>
+                  <MenuItem value="cotton">Cotton Fabrics</MenuItem>
+                  <MenuItem value="polyester">Polyester Materials</MenuItem>
+                  <MenuItem value="yarn">Yarns & Threads</MenuItem>
+                  <MenuItem value="fabric">Woven Fabrics</MenuItem>
+                  <MenuItem value="knit">Knitted Materials</MenuItem>
+                  <MenuItem value="denim">Denim & Jeans</MenuItem>
+                  <MenuItem value="synthetic">Synthetic Fibers</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

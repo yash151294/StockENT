@@ -120,41 +120,41 @@ const LandingPage: React.FC = () => {
   const features = [
     {
       icon: <Search sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Advanced Search',
-      description: 'Find exactly what you need with our powerful search and filtering system',
+      title: 'Advanced Textile Search',
+      description: 'Find fabrics by weight, composition, certifications (OEKO-TEX, GOTS), and technical specifications with precision filtering',
     },
     {
       icon: <Gavel sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Live Auctions',
-      description: 'Participate in real-time auctions with automatic bidding features',
+      title: 'Live Dead Stock Auctions',
+      description: 'Participate in real-time auctions for surplus inventory with automatic bidding and reserve price protection',
     },
     {
       icon: <Message sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Anonymous Messaging',
-      description: 'Communicate securely with buyers and sellers while protecting your identity',
+      title: 'Secure B2B Messaging',
+      description: 'Communicate with verified textile suppliers and buyers while maintaining business confidentiality',
     },
     {
       icon: <Security sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Secure Transactions',
-      description: 'Trade with confidence using our secure and verified platform',
+      title: 'Verified Suppliers',
+      description: 'Trade with confidence using our verified supplier network with quality certifications and compliance tracking',
     },
     {
       icon: <Language sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Multi-Language',
-      description: 'Available in English, Chinese, and Turkish for global reach',
+      title: 'Global Textile Network',
+      description: 'Connect with mills, manufacturers, and suppliers worldwide in English, Chinese, and Turkish',
     },
     {
       icon: <Speed sx={{ fontSize: 40, color: getPrimaryColor() }} />,
-      title: 'Real-Time Updates',
-      description: 'Get instant notifications and updates on your transactions',
+      title: 'Real-Time Inventory',
+      description: 'Get instant updates on dead stock availability, price changes, and new surplus listings',
     },
   ];
 
   const stats = [
-    { number: '10,000+', label: 'Active Users' },
-    { number: '50,000+', label: 'Products Listed' },
-    { number: '1,000+', label: 'Successful Transactions' },
-    { number: '99.9%', label: 'Uptime' },
+    { number: '2,500+', label: 'Verified Textile Suppliers' },
+    { number: '15,000+', label: 'Dead Stock Listings' },
+    { number: '3,200+', label: 'Successful B2B Transactions' },
+    { number: '95%', label: 'Waste Reduction Achieved' },
   ];
 
   return (
@@ -328,20 +328,20 @@ const LandingPage: React.FC = () => {
               <Typography variant="h2" component="h1" gutterBottom sx={{ fontWeight: 700 }}>
                 {state.isAuthenticated ? (
                   state.user?.role === 'SELLER' 
-                    ? 'Sell Your Textile Products'
-                    : 'Find Quality Textile Materials'
+                    ? 'Transform Your Dead Stock into Revenue'
+                    : 'Source Premium Textile Materials'
                 ) : userType === 'seller'
-                  ? 'Sell Your Textile Products'
-                  : 'Find Quality Textile Materials'}
+                  ? 'Transform Your Dead Stock into Revenue'
+                  : 'Source Premium Textile Materials'}
               </Typography>
               <Typography variant="h5" gutterBottom sx={{ opacity: 0.9, mb: 4 }}>
                 {state.isAuthenticated ? (
                   state.user?.role === 'SELLER' 
-                    ? 'List your surplus inventory and connect with buyers worldwide. Create auctions, set fixed prices, and grow your business.'
-                    : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'
+                    ? 'Connect with global buyers for your surplus inventory. List dead stock with technical specifications, certifications, and create competitive auctions to maximize returns.'
+                    : 'Access verified textile suppliers with OEKO-TEX, GOTS certified materials. Find fabrics by weight, composition, and technical specs. Reduce waste through circular fashion sourcing.'
                 ) : userType === 'seller'
-                  ? 'List your surplus inventory and connect with buyers worldwide. Create auctions, set fixed prices, and grow your business.'
-                  : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'}
+                  ? 'Connect with global buyers for your surplus inventory. List dead stock with technical specifications, certifications, and create competitive auctions to maximize returns.'
+                  : 'Access verified textile suppliers with OEKO-TEX, GOTS certified materials. Find fabrics by weight, composition, and technical specs. Reduce waste through circular fashion sourcing.'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                 {state.isAuthenticated ? (
@@ -447,10 +447,10 @@ const LandingPage: React.FC = () => {
       <Box sx={{ py: 8 }}>
         <Container maxWidth="lg">
           <Typography variant="h3" component="h2" textAlign="center" gutterBottom sx={{ fontWeight: 700 }}>
-            Why Choose StockENT?
+            Why Choose StockENT for Textile Dead Stock?
           </Typography>
           <Typography variant="h6" textAlign="center" color="text.secondary" sx={{ mb: 6 }}>
-            Built specifically for the textile industry with features that matter
+            The only B2B marketplace designed specifically for textile professionals with industry expertise and circular economy focus
           </Typography>
           
           <Grid container spacing={4}>
@@ -493,10 +493,10 @@ const LandingPage: React.FC = () => {
         <Container maxWidth="md">
           <Box textAlign="center">
             <Typography variant="h3" component="h2" gutterBottom sx={{ fontWeight: 700 }}>
-              Ready to Start Trading?
+              Ready to Transform Your Textile Business?
             </Typography>
             <Typography variant="h6" gutterBottom sx={{ opacity: 0.9, mb: 4 }}>
-              Join thousands of textile professionals already using StockENT to grow their business
+              Join 2,500+ verified textile suppliers and buyers already using StockENT to reduce waste and maximize revenue through circular fashion
             </Typography>
             <Button
               variant="contained"
@@ -529,7 +529,7 @@ const LandingPage: React.FC = () => {
                 StockENT
               </Typography>
               <Typography variant="body2" color="grey.400">
-                The leading B2B marketplace for textile materials. Connecting mills with manufacturers worldwide.
+                The leading B2B marketplace for textile dead stock and surplus materials. Connecting verified mills, manufacturers, and suppliers worldwide to reduce waste and maximize value through circular fashion.
               </Typography>
             </Grid>
             <Grid item xs={12} md={4}>
