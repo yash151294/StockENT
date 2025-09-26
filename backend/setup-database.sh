@@ -59,7 +59,7 @@ print_status "PostgreSQL service is running"
 
 # Database configuration
 DB_NAME="stockent_db"
-DB_USER="stockent_user"
+DB_USER="postgres"
 DB_PASSWORD="stockent_secure_password_2024"
 
 echo ""

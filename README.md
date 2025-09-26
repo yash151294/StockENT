@@ -1,1 +1,1 @@
-# StockENT - Stock Trading Platform
+# StockENT - Dead-Stock Trading Platform
