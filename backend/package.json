@@ -9,6 +9,11 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:performance": "jest tests/performance",
+    "test:all": "jest --passWithNoTests",
+    "test:ci": "jest --ci --coverage --watchAll=false",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
@@ -17,7 +22,8 @@
     "db:deploy": "prisma migrate deploy",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test:setup": "node tests/setup.js"
   },
   "dependencies": {
     "@prisma/client": "^5.6.0",

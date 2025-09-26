@@ -1,5 +1,68 @@
 {
+  "name": "stockent",
+  "version": "1.0.0",
+  "description": "StockENT - B2B Textile Marketplace",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "test": "npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "test:backend": "cd backend && npm run test:all",
+    "test:frontend": "cd frontend && npm run test:all",
+    "test:e2e": "cd e2e && npx playwright test",
+    "test:unit": "npm run test:backend:unit && npm run test:frontend:unit",
+    "test:integration": "npm run test:backend:integration",
+    "test:performance": "npm run test:backend:performance",
+    "test:ci": "npm run test:backend:ci && npm run test:frontend:ci && npm run test:e2e",
+    "test:coverage": "npm run test:backend:coverage && npm run test:frontend:coverage",
+    "test:backend:unit": "cd backend && npm run test:unit",
+    "test:backend:integration": "cd backend && npm run test:integration",
+    "test:backend:performance": "cd backend && npm run test:performance",
+    "test:backend:ci": "cd backend && npm run test:ci",
+    "test:backend:coverage": "cd backend && npm run test:coverage",
+    "test:frontend:unit": "cd frontend && npm run test:unit",
+    "test:frontend:ci": "cd frontend && npm run test:ci",
+    "test:frontend:coverage": "cd frontend && npm run test:coverage",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd backend && npm run lint",
+    "lint:frontend": "cd frontend && npm run lint",
+    "lint:fix": "npm run lint:backend:fix && npm run lint:frontend:fix",
+    "lint:backend:fix": "cd backend && npm run lint:fix",
+    "lint:frontend:fix": "cd frontend && npm run lint:fix",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "cd backend && npm run format",
+    "format:frontend": "cd frontend && npm run format",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install && cd ../e2e && npm install",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules e2e/node_modules",
+    "setup": "npm run install:all && npm run setup:database",
+    "setup:database": "cd backend && npm run db:generate && npm run db:migrate && npm run db:seed",
+    "dev": "npm run start",
+    "build:production": "npm run build && npm run test:ci",
+    "deploy": "npm run build:production"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  },
   "dependencies": {
     "axios": "^1.12.2"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": [
+    "textile",
+    "marketplace",
+    "b2b",
+    "auction",
+    "real-time",
+    "testing",
+    "e2e",
+    "performance"
+  ],
+  "author": "StockENT Team",
+  "license": "MIT"
 }
