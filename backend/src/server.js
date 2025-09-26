@@ -21,11 +21,13 @@ const messageRoutes = require('./routes/messages');
 const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const searchRoutes = require('./routes/search');
+const monitoringRoutes = require('./monitoring/monitoringRoutes');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
 const { notFound } = require('./middleware/notFound');
 const { logger } = require('./utils/logger');
+const monitoringSystem = require('./monitoring');
 
 const app = express();
 const server = createServer(app);
@@ -144,6 +146,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/monitoring', monitoringRoutes);
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
@@ -250,12 +253,22 @@ const initializeServer = async () => {
     );
   }
 
+  // Initialize monitoring system
+  try {
+    await monitoringSystem.initialize();
+    logger.info('✅ Monitoring system initialized');
+  } catch (error) {
+    logger.error('❌ Failed to initialize monitoring system:', error);
+    logger.warn('   Server will continue without monitoring');
+  }
+
   server.listen(PORT, () => {
     logger.info(`🚀 Server running on port ${PORT}`);
     logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
     logger.info(`📱 Frontend URL: ${process.env.FRONTEND_URL}`);
     logger.info(`🔗 API Documentation: http://localhost:${PORT}/api/docs`);
     logger.info(`🔍 Redis Status: http://localhost:${PORT}/api/redis-status`);
+    logger.info(`📊 Monitoring Dashboard: http://localhost:${PORT}/api/monitoring/dashboard`);
   });
 };
 
