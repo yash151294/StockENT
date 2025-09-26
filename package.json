@@ -1,4 +1,28 @@
 {
+  "name": "stockent-deployment-manager",
+  "version": "1.0.0",
+  "description": "StockENT B2B Textile Marketplace - Deployment Management System",
+  "scripts": {
+    "deploy": "./scripts/deploy.sh",
+    "monitor": "./scripts/monitor-changes.sh continuous",
+    "monitor:once": "./scripts/monitor-changes.sh once",
+    "test": "./scripts/test-pipeline.sh",
+    "rollback": "./scripts/rollback.sh --list",
+    "rollback:tag": "./scripts/rollback.sh --tag",
+    "rollback:commit": "./scripts/rollback.sh --commit",
+    "setup": "chmod +x scripts/*.sh",
+    "status": "git status && echo '---' && git log --oneline -5"
+  },
+  "keywords": [
+    "deployment",
+    "automation",
+    "textile",
+    "marketplace",
+    "b2b",
+    "ci-cd"
+  ],
+  "author": "StockENT Team",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.12.2"
   }
