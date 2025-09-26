@@ -107,10 +107,10 @@ const AuctionsPage: React.FC = () => {
       {/* Header */}
       <Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Auctions
+          Dead Stock Auctions
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Participate in live auctions for textile materials
+          Bid on premium textile dead stock from verified suppliers. Find surplus fabrics, yarns, and materials at competitive prices through live auctions.
         </Typography>
       </Box>
 

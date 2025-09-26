@@ -270,10 +270,10 @@ const ProductCreatePage: React.FC = () => {
   return (
     <Box>
       <Typography variant="h4" component="h1" gutterBottom>
-        List New Product
+        List Your Dead Stock
       </Typography>
       <Typography variant="body1" color="text.secondary" mb={4}>
-        Add a new product to your inventory
+        Transform your surplus textile inventory into revenue. Include technical specifications, certifications, and detailed material information to attract serious buyers.
       </Typography>
 
       {errors.general && (
@@ -296,7 +296,7 @@ const ProductCreatePage: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Product Title"
+                  label="Product Title (Include fabric type, weight, composition)"
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   error={!!errors.title}
@@ -335,7 +335,7 @@ const ProductCreatePage: React.FC = () => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Description"
+                  label="Description (Include technical specs, certifications, condition, origin)"
                   multiline
                   rows={4}
                   value={formData.description}
@@ -404,13 +404,15 @@ const ProductCreatePage: React.FC = () => {
                     onChange={(e) => handleInputChange('unit', e.target.value)}
                     label="Unit"
                   >
-                    <MenuItem value="KG">KG</MenuItem>
-                    <MenuItem value="TONS">TONS</MenuItem>
-                    <MenuItem value="METERS">METERS</MenuItem>
-                    <MenuItem value="YARDS">YARDS</MenuItem>
-                    <MenuItem value="PIECES">PIECES</MenuItem>
-                    <MenuItem value="ROLLS">ROLLS</MenuItem>
-                    <MenuItem value="BALES">BALES</MenuItem>
+                    <MenuItem value="KG">KG (Kilograms)</MenuItem>
+                    <MenuItem value="TONS">TONS (Metric Tons)</MenuItem>
+                    <MenuItem value="METERS">METERS (Linear)</MenuItem>
+                    <MenuItem value="YARDS">YARDS (Linear)</MenuItem>
+                    <MenuItem value="PIECES">PIECES (Individual)</MenuItem>
+                    <MenuItem value="ROLLS">ROLLS (Fabric Rolls)</MenuItem>
+                    <MenuItem value="BALES">BALES (Fiber Bales)</MenuItem>
+                    <MenuItem value="SQUARE_METERS">SQUARE METERS</MenuItem>
+                    <MenuItem value="SQUARE_YARDS">SQUARE YARDS</MenuItem>
                   </Select>
                   {errors.unit && <FormHelperText>{errors.unit}</FormHelperText>}
                 </FormControl>
@@ -588,14 +590,17 @@ const ProductCreatePage: React.FC = () => {
               <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Specifications
+                  Technical Specifications
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Add technical details like fabric weight (GSM), composition, certifications (OEKO-TEX, GOTS), color fastness, shrinkage, etc.
                 </Typography>
               </Grid>
 
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
-                  label="Specification Key"
+                  label="Specification (e.g., Fabric Weight, Composition, Certification)"
                   value={specKey}
                   onChange={(e) => setSpecKey(e.target.value)}
                 />
@@ -604,7 +609,7 @@ const ProductCreatePage: React.FC = () => {
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
-                  label="Specification Value"
+                  label="Value (e.g., 180 GSM, 100% Cotton, OEKO-TEX Standard 100)"
                   value={specValue}
                   onChange={(e) => setSpecValue(e.target.value)}
                 />
