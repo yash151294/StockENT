@@ -108,7 +108,7 @@ StockENT/
    **Backend Environment** (`backend/.env`):
    ```env
    NODE_ENV=development
-   PORT=5000
+   PORT=5001
    DATABASE_URL="postgresql://username:password@localhost:5432/stockent"
    REDIS_URL="redis://localhost:6379"
    JWT_SECRET="your-jwt-secret"
@@ -122,7 +122,7 @@ StockENT/
 
    **Frontend Environment** (`frontend/.env`):
    ```env
-   REACT_APP_API_URL=http://localhost:5000
+   REACT_APP_API_URL=http://localhost:5001
    REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id
    ```
 
@@ -148,7 +148,7 @@ StockENT/
 
 The application will be available at:
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+- Backend API: http://localhost:5001
 
 ## 🔧 Available Scripts
 

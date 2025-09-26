@@ -133,8 +133,8 @@ cd ..
 sleep 3
 
 # Check if backend is running
-if curl -s http://localhost:5000/api/health > /dev/null 2>&1; then
-    print_success "Backend server is running on port 5000"
+if curl -s http://localhost:5001/api/health > /dev/null 2>&1; then
+    print_success "Backend server is running on port 5001"
 else
     print_warning "Backend server may not be running properly"
 fi
@@ -149,9 +149,9 @@ cd ..
 print_success "Application startup initiated!"
 echo ""
 echo "📱 Frontend: http://localhost:3000"
-echo "🔧 Backend API: http://localhost:5000/api"
-echo "🔍 Health Check: http://localhost:5000/api/health"
-echo "📊 Redis Status: http://localhost:5000/api/redis-status"
+echo "🔧 Backend API: http://localhost:5001/api"
+echo "🔍 Health Check: http://localhost:5001/api/health"
+echo "📊 Redis Status: http://localhost:5001/api/redis-status"
 echo ""
 echo "Press Ctrl+C to stop all services"
 

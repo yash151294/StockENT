@@ -233,7 +233,7 @@ process.on('SIGINT', () => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Initialize Redis connection before starting server
 const initializeServer = async () => {

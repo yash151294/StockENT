@@ -125,7 +125,7 @@ JWT_EXPIRES_IN="15m"
 JWT_REFRESH_EXPIRES_IN="7d"
 
 # Server Configuration
-PORT=5000
+PORT=5001
 NODE_ENV="development"
 
 # CORS

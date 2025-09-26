@@ -182,7 +182,7 @@ const getGoogleAuthUrl = (role = null) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const redirectUri =
     process.env.GOOGLE_REDIRECT_URI ||
-    'http://localhost:5000/api/auth/google/callback';
+    'http://localhost:5001/api/auth/google/callback';
   const scope = 'profile email';
 
   if (!clientId) {
