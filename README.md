@@ -1,4 +1,4 @@
-# StockENT - Stock Trading Platform
+# StockENT - Dead-Stock Trading Platform
 
 A comprehensive stock trading platform built with React, Node.js, and PostgreSQL, featuring real-time auctions, user management, and secure authentication.
 
