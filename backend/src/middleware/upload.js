@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const { logger } = require('../utils/logger');
 
 // Ensure upload directories exist
@@ -24,7 +25,7 @@ const storage = multer.diskStorage({
 
     if (file.fieldname === 'productImages') {
       uploadPath = 'uploads/products';
-    } else if (file.fieldname === 'profilePicture') {
+    } else if (file.fieldname === 'profilePicture' || file.fieldname === 'avatar') {
       uploadPath = 'uploads/users';
     }
 
@@ -62,16 +63,19 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-    files: 10, // Maximum 10 files
+    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    files: 4, // Maximum 4 files for product images
   },
 });
 
 // Product images upload middleware
-const uploadProductImages = upload.array('productImages', 10);
+const uploadProductImages = upload.array('productImages', 4);
 
 // Profile picture upload middleware
 const uploadProfilePicture = upload.single('profilePicture');
+
+// Avatar upload middleware
+const uploadAvatar = upload.single('avatar');
 
 // Single file upload middleware
 const uploadSingle = upload.single('file');
@@ -125,26 +129,73 @@ const handleUploadError = (error, req, res, next) => {
 };
 
 // Image optimization function
-const optimizeImage = async (filePath, _options = {}) => {
+const optimizeImage = async (filePath, options = {}) => {
   try {
-    // This would typically use a library like sharp or jimp
-    // For now, we'll just return the original path
-    // In production, you'd want to:
-    // 1. Resize the image to different sizes
-    // 2. Compress the image
-    // 3. Generate thumbnails
-    // 4. Convert to WebP format
+    const { 
+      maxWidth = 1920, 
+      maxHeight = 1080, 
+      quality = 85,
+      maxFileSize = 2 * 1024 * 1024 // 2MB max file size
+    } = options;
 
-    // Destructure options for future use
-    // const { width = 800, height = 600, quality = 80 } = options;
+    // Get file stats to check if compression is needed
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
 
-    // Placeholder for image optimization
-    // const sharp = require('sharp');
-    // await sharp(filePath)
-    //   .resize(width, height, { fit: 'inside', withoutEnlargement: true })
-    //   .jpeg({ quality })
-    //   .toFile(optimizedPath);
+    // If file is already small enough, return original
+    if (fileSize <= maxFileSize) {
+      logger.info(`Image ${filePath} is already optimized (${fileSize} bytes)`);
+      return filePath;
+    }
 
+    // Create optimized file path
+    const ext = path.extname(filePath);
+    const name = path.basename(filePath, ext);
+    const dir = path.dirname(filePath);
+    const optimizedPath = path.join(dir, `${name}_optimized${ext}`);
+
+    // Get image metadata
+    const metadata = await sharp(filePath).metadata();
+    
+    // Calculate new dimensions if needed
+    let { width, height } = metadata;
+    if (width > maxWidth || height > maxHeight) {
+      const ratio = Math.min(maxWidth / width, maxHeight / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+
+    // Optimize image
+    await sharp(filePath)
+      .resize(width, height, { 
+        fit: 'inside', 
+        withoutEnlargement: true 
+      })
+      .jpeg({ 
+        quality,
+        progressive: true,
+        mozjpeg: true
+      })
+      .png({ 
+        quality,
+        progressive: true,
+        compressionLevel: 9
+      })
+      .webp({ 
+        quality,
+        effort: 6
+      })
+      .toFile(optimizedPath);
+
+    // Replace original with optimized version
+    fs.unlinkSync(filePath);
+    fs.renameSync(optimizedPath, filePath);
+
+    const newStats = fs.statSync(filePath);
+    const compressionRatio = ((fileSize - newStats.size) / fileSize * 100).toFixed(2);
+    
+    logger.info(`Image optimized: ${filePath} - ${fileSize} -> ${newStats.size} bytes (${compressionRatio}% reduction)`);
+    
     return filePath;
   } catch (error) {
     logger.error('Image optimization error:', error);
@@ -185,7 +236,7 @@ const validateImageDimensions = (
 };
 
 // Generate image URLs
-const generateImageUrl = (filePath, baseUrl = process.env.BASE_URL) => {
+const generateImageUrl = (filePath, baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 5001}`) => {
   if (!filePath) return null;
 
   // Remove uploads/ prefix and replace with proper URL
@@ -208,9 +259,59 @@ const deleteFile = (filePath) => {
   }
 };
 
+// Process multiple product images with compression
+const processProductImages = async (files) => {
+  try {
+    if (!files || files.length === 0) {
+      return [];
+    }
+
+    // Limit to 4 images maximum
+    const limitedFiles = files.slice(0, 4);
+    const processedImages = [];
+
+    for (let i = 0; i < limitedFiles.length; i++) {
+      const file = limitedFiles[i];
+      
+      try {
+        // Optimize the image
+        const optimizedPath = await optimizeImage(file.path, {
+          maxWidth: 1920,
+          maxHeight: 1080,
+          quality: 85,
+          maxFileSize: 2 * 1024 * 1024 // 2MB
+        });
+
+        // Generate image URL
+        const imageUrl = generateImageUrl(optimizedPath);
+        
+        processedImages.push({
+          imageUrl,
+          alt: file.originalname,
+          isPrimary: i === 0, // First image is primary
+          orderIndex: i,
+          originalName: file.originalname,
+          filePath: optimizedPath
+        });
+
+        logger.info(`Processed image ${i + 1}/${limitedFiles.length}: ${file.originalname}`);
+      } catch (error) {
+        logger.error(`Failed to process image ${file.originalname}:`, error);
+        // Continue with other images even if one fails
+      }
+    }
+
+    return processedImages;
+  } catch (error) {
+    logger.error('Process product images error:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   uploadProductImages,
   uploadProfilePicture,
+  uploadAvatar,
   uploadSingle,
   uploadMultiple,
   handleUploadError,
@@ -219,4 +320,5 @@ module.exports = {
   validateImageDimensions,
   generateImageUrl,
   deleteFile,
+  processProductImages,
 };

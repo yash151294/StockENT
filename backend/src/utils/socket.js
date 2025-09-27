@@ -133,7 +133,12 @@ const initSocket = (server) => {
     // Handle new message
     socket.on('new_message', async (data) => {
       try {
-        const { conversationId, content, messageType = 'TEXT' } = data;
+        const { 
+          conversationId, 
+          content, 
+          messageType = 'TEXT',
+          encryptionData = null 
+        } = data;
 
         // Verify user has access to conversation
         const conversation = await prisma.conversation.findFirst({
@@ -155,15 +160,28 @@ const initSocket = (server) => {
           return;
         }
 
+        // Prepare message data
+        const messageData = {
+          conversationId,
+          senderId: socket.user.id,
+          content,
+          messageType,
+          status: 'SENT',
+        };
+
+        // Add encryption fields if provided
+        if (encryptionData) {
+          messageData.isEncrypted = true;
+          messageData.encryptedContent = encryptionData.encryptedContent;
+          messageData.encryptionKeyId = encryptionData.keyId;
+          messageData.iv = encryptionData.iv;
+          messageData.tag = encryptionData.tag;
+          messageData.keyExchangeId = encryptionData.keyExchangeId;
+        }
+
         // Create message
         const message = await prisma.message.create({
-          data: {
-            conversationId,
-            senderId: socket.user.id,
-            content,
-            messageType,
-            status: 'SENT',
-          },
+          data: messageData,
           include: {
             sender: {
               select: {
@@ -204,6 +222,82 @@ const initSocket = (server) => {
       } catch (error) {
         logger.error('Socket new message error:', error);
         socket.emit('error', { message: 'Failed to send message' });
+      }
+    });
+
+    // Handle key exchange request
+    socket.on('key_exchange_request', async (data) => {
+      try {
+        const { conversationId, toUserId, encryptedAESKey, keyId, publicKey } = data;
+
+        // Verify user has access to conversation
+        const conversation = await prisma.conversation.findFirst({
+          where: {
+            id: conversationId,
+            OR: [{ buyerId: socket.user.id }, { sellerId: socket.user.id }],
+          },
+        });
+
+        if (!conversation) {
+          socket.emit('error', { message: 'Conversation not found or access denied' });
+          return;
+        }
+
+        // Create key exchange record
+        const keyExchange = await prisma.keyExchange.create({
+          data: {
+            conversationId,
+            fromUserId: socket.user.id,
+            toUserId,
+            encryptedAESKey,
+            keyId,
+            publicKey,
+            status: 'PENDING',
+          },
+        });
+
+        // Notify recipient
+        io.to(`user:${toUserId}`).emit('key_exchange_received', {
+          keyExchangeId: keyExchange.id,
+          conversationId,
+          fromUser: {
+            id: socket.user.id,
+            companyName: socket.user.companyName,
+          },
+        });
+
+        logger.info(`Key exchange request sent: ${keyExchange.id}`);
+      } catch (error) {
+        logger.error('Socket key exchange error:', error);
+        socket.emit('error', { message: 'Failed to process key exchange' });
+      }
+    });
+
+    // Handle key exchange response
+    socket.on('key_exchange_response', async (data) => {
+      try {
+        const { keyExchangeId, status = 'PROCESSED' } = data;
+
+        // Update key exchange status
+        const keyExchange = await prisma.keyExchange.update({
+          where: { id: keyExchangeId },
+          data: {
+            status,
+            processedAt: new Date(),
+          },
+        });
+
+        // Notify original sender
+        io.to(`user:${keyExchange.fromUserId}`).emit('key_exchange_processed', {
+          keyExchangeId,
+          conversationId: keyExchange.conversationId,
+          status,
+        });
+
+        logger.info(`Key exchange processed: ${keyExchangeId} with status: ${status}`);
+      } catch (error) {
+        logger.error('Socket key exchange response error:', error);
+        socket.emit('error', { message: 'Failed to process key exchange response' });
       }
     });
 
@@ -303,6 +397,103 @@ const initSocket = (server) => {
         userId: socket.user.id,
         conversationId,
       });
+    });
+
+    // Handle message deletion
+    socket.on('delete_message', async (data) => {
+      try {
+        const { messageId } = data;
+
+        // Verify message exists and user has access
+        const message = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            OR: [{ senderId: socket.user.id }, { receiverId: socket.user.id }],
+          },
+          include: {
+            conversation: true,
+          },
+        });
+
+        if (!message) {
+          socket.emit('error', {
+            message: 'Message not found or access denied',
+          });
+          return;
+        }
+
+        // Delete the message
+        await prisma.message.delete({
+          where: { id: messageId },
+        });
+
+        // Emit deletion to conversation room
+        io.to(`conversation:${message.conversationId}`).emit(
+          'message_deleted',
+          {
+            messageId,
+            conversationId: message.conversationId,
+            deletedBy: socket.user.id,
+          }
+        );
+
+        logger.info(
+          `Message deleted via socket: ${messageId} by user: ${socket.user.id}`
+        );
+      } catch (error) {
+        logger.error('Socket delete message error:', error);
+        socket.emit('error', { message: 'Failed to delete message' });
+      }
+    });
+
+    // Handle conversation deletion
+    socket.on('delete_conversation', async (data) => {
+      try {
+        const { conversationId } = data;
+
+        // Verify conversation exists and user has access
+        const conversation = await prisma.conversation.findFirst({
+          where: {
+            id: conversationId,
+            OR: [{ buyerId: socket.user.id }, { sellerId: socket.user.id }],
+          },
+        });
+
+        if (!conversation) {
+          socket.emit('error', {
+            message: 'Conversation not found or access denied',
+          });
+          return;
+        }
+
+        // Delete conversation (cascade will handle messages)
+        await prisma.conversation.delete({
+          where: { id: conversationId },
+        });
+
+        // Emit deletion to conversation room and both users
+        io.to(`conversation:${conversationId}`).emit('conversation_deleted', {
+          conversationId,
+          deletedBy: socket.user.id,
+        });
+
+        // Emit to both users' personal rooms
+        io.to(`user:${conversation.buyerId}`).emit('conversation_deleted', {
+          conversationId,
+          deletedBy: socket.user.id,
+        });
+        io.to(`user:${conversation.sellerId}`).emit('conversation_deleted', {
+          conversationId,
+          deletedBy: socket.user.id,
+        });
+
+        logger.info(
+          `Conversation deleted via socket: ${conversationId} by user: ${socket.user.id}`
+        );
+      } catch (error) {
+        logger.error('Socket delete conversation error:', error);
+        socket.emit('error', { message: 'Failed to delete conversation' });
+      }
     });
 
     // Handle disconnect

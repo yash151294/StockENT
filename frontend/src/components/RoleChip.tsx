@@ -14,6 +14,7 @@ import {
   Store,
   SwapHoriz,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
 
@@ -82,22 +83,28 @@ const RoleChip: React.FC<RoleChipProps> = ({
 
   return (
     <>
-      <Chip
-        icon={isChanging ? <CircularProgress size={16} /> : getRoleIcon()}
-        label={getRoleLabel()}
-        onClick={handleClick}
-        color={getRoleColor()}
-        variant="filled"
-        size="small"
-        disabled={isChanging}
-        sx={{
-          cursor: 'pointer',
-          '&:hover': {
-            opacity: 0.8,
-          },
-          ...sx,
-        }}
-      />
+      <motion.div
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+      >
+        <Chip
+          icon={isChanging ? <CircularProgress size={16} /> : getRoleIcon()}
+          label={getRoleLabel()}
+          onClick={handleClick}
+          color={getRoleColor()}
+          variant="filled"
+          size="small"
+          disabled={isChanging}
+          sx={{
+            cursor: 'pointer',
+            '&:hover': {
+              opacity: 0.8,
+            },
+            ...sx,
+          }}
+        />
+      </motion.div>
 
       <Menu
         anchorEl={anchorEl}
@@ -124,33 +131,55 @@ const RoleChip: React.FC<RoleChipProps> = ({
           </Typography>
         </Box>
         
-        <MenuItem
-          onClick={() => handleRoleChange('BUYER')}
-          disabled={state.user?.role === 'BUYER' || isChanging}
-          selected={state.user?.role === 'BUYER'}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
         >
-          <ListItemIcon>
-            <ShoppingCart color={state.user?.role === 'BUYER' ? 'primary' : 'inherit'} />
-          </ListItemIcon>
-          <ListItemText
-            primary="Buyer Account"
-            secondary="Browse products and participate in auctions"
-          />
-        </MenuItem>
+          <MenuItem
+            onClick={() => handleRoleChange('BUYER')}
+            disabled={state.user?.role === 'BUYER' || isChanging}
+            selected={state.user?.role === 'BUYER'}
+            sx={{
+              '&:hover': {
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              }
+            }}
+          >
+            <ListItemIcon>
+              <ShoppingCart color={state.user?.role === 'BUYER' ? 'primary' : 'inherit'} />
+            </ListItemIcon>
+            <ListItemText
+              primary="Buyer Account"
+              secondary="Browse products and participate in auctions"
+            />
+          </MenuItem>
+        </motion.div>
         
-        <MenuItem
-          onClick={() => handleRoleChange('SELLER')}
-          disabled={state.user?.role === 'SELLER' || isChanging}
-          selected={state.user?.role === 'SELLER'}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: 0.1 }}
         >
-          <ListItemIcon>
-            <Store color={state.user?.role === 'SELLER' ? 'secondary' : 'inherit'} />
-          </ListItemIcon>
-          <ListItemText
-            primary="Seller Account"
-            secondary="List products and create auctions"
-          />
-        </MenuItem>
+          <MenuItem
+            onClick={() => handleRoleChange('SELLER')}
+            disabled={state.user?.role === 'SELLER' || isChanging}
+            selected={state.user?.role === 'SELLER'}
+            sx={{
+              '&:hover': {
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              }
+            }}
+          >
+            <ListItemIcon>
+              <Store color={state.user?.role === 'SELLER' ? 'secondary' : 'inherit'} />
+            </ListItemIcon>
+            <ListItemText
+              primary="Seller Account"
+              secondary="List products and create auctions"
+            />
+          </MenuItem>
+        </motion.div>
       </Menu>
     </>
   );

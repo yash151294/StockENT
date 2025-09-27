@@ -358,8 +358,8 @@ router.get('/filters', [apiLimiter], async (req, res) => {
     // Get price ranges
     const priceRanges = await prisma.product.aggregate({
       where: { status: 'ACTIVE' },
-      _min: { price: true },
-      _max: { price: true },
+      _min: { basePrice: true },
+      _max: { basePrice: true },
     });
 
     // Get listing types

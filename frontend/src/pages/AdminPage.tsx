@@ -44,6 +44,7 @@ import { useQuery } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getImageUrl } from '../utils/imageUtils';
 
 const AdminPage: React.FC = () => {
   const navigate = useNavigate();
@@ -130,11 +131,55 @@ const AdminPage: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
+      <Box sx={{ 
+        background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 50%, #0A0A0A 100%)',
+        py: 8,
+        mb: 4,
+        textAlign: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%)',
+          pointerEvents: 'none',
+          zIndex: 1,
+        },
+        '& > *': {
+          position: 'relative',
+          zIndex: 2,
+        },
+      }}>
+        <Typography 
+          variant="h2" 
+          component="h1" 
+          gutterBottom
+          sx={{ 
+            fontWeight: 800,
+            background: 'linear-gradient(135deg, #FFFFFF 0%, #6366F1 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            mb: 3,
+            fontSize: { xs: '2rem', md: '2.5rem' }
+          }}
+        >
           Admin Dashboard
         </Typography>
-        <Typography variant="body1" color="text.secondary">
+        <Typography 
+          variant="h5" 
+          sx={{ 
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontWeight: 400,
+            maxWidth: '600px', 
+            mx: 'auto',
+            lineHeight: 1.6
+          }}
+        >
           Manage users, products, and platform settings
         </Typography>
       </Box>
@@ -382,7 +427,7 @@ const AdminPage: React.FC = () => {
                             <Box display="flex" alignItems="center" gap={2}>
                               <Box
                                 component="img"
-                                src={product.images[0]?.imageUrl || '/placeholder-product.jpg'}
+                                src={getImageUrl(product.images[0]?.imageUrl)}
                                 alt={product.title}
                                 sx={{
                                   width: 60,

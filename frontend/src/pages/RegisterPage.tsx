@@ -17,6 +17,9 @@ import {
   Divider,
   Grid,
   InputAdornment,
+  Stack,
+  Avatar,
+  Chip,
 } from '@mui/material';
 import {
   Person,
@@ -24,17 +27,24 @@ import {
   Email,
   Lock,
   Phone,
+  ArrowBack,
+  Security,
+  Speed,
+  Shield,
+  CheckCircle,
 } from '@mui/icons-material';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import GoogleOAuthButton from '../components/GoogleOAuthButton';
+import { motion } from 'framer-motion';
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register } = useAuth();
   const { t } = useLanguage();
   const [error, setError] = useState<string | null>(null);
@@ -147,31 +157,175 @@ const RegisterPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+        background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 50%, #0A0A0A 100%)',
+        position: 'relative',
+        overflow: 'hidden',
         py: 4,
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 50%)',
+          pointerEvents: 'none',
+        },
       }}
     >
-      <Container maxWidth="md">
-        <Paper elevation={24} sx={{ p: 4, borderRadius: 2 }}>
-          <Box textAlign="center" mb={4}>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 700 }}>
-              StockENT
-            </Typography>
-            <Typography variant="h5" component="h2" gutterBottom>
-              Create Your Account
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Join the leading B2B textile marketplace
-            </Typography>
-          </Box>
+      <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 6, 
+              borderRadius: 4,
+              background: 'rgba(17, 17, 17, 0.8)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(99, 102, 241, 0.2)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
+            }}
+          >
+            {/* Back Button */}
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <Button
+                startIcon={<ArrowBack />}
+                onClick={() => navigate('/')}
+                sx={{
+                  color: '#6366F1',
+                  mb: 3,
+                  '&:hover': {
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                  }
+                }}
+              >
+                Back to Home
+              </Button>
+            </motion.div>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {error}
-            </Alert>
-          )}
+            {/* Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <Box textAlign="center" mb={6}>
+                <motion.div
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 0.5, delay: 0.4 }}
+                >
+                  <Avatar
+                    sx={{
+                      width: 80,
+                      height: 80,
+                      background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                      color: '#000000',
+                      mx: 'auto',
+                      mb: 3,
+                      fontSize: '2rem',
+                      fontWeight: 800,
+                    }}
+                  >
+                    S
+                  </Avatar>
+                </motion.div>
+                <Typography 
+                  variant="h3" 
+                  component="h1" 
+                  gutterBottom 
+                  sx={{ 
+                    fontWeight: 800,
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #6366F1 100%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    mb: 2,
+                  }}
+                >
+                  Create Your Account
+                </Typography>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontWeight: 400,
+                    mb: 3,
+                  }}
+                >
+                  Join the leading B2B textile marketplace
+                </Typography>
+                
+                {/* Benefits */}
+                <Stack direction="row" spacing={2} justifyContent="center" sx={{ mb: 4 }}>
+                  <Chip 
+                    icon={<CheckCircle />} 
+                    label="Free to Join" 
+                    size="small"
+                    sx={{ 
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      color: '#6366F1',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                    }} 
+                  />
+                  <Chip 
+                    icon={<Security />} 
+                    label="Secure" 
+                    size="small"
+                    sx={{ 
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      color: '#6366F1',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                    }} 
+                  />
+                  <Chip 
+                    icon={<Speed />} 
+                    label="Fast Setup" 
+                    size="small"
+                    sx={{ 
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      color: '#6366F1',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                    }} 
+                  />
+                </Stack>
+              </Box>
+            </motion.div>
 
-          <form onSubmit={formik.handleSubmit}>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Alert 
+                  severity="error" 
+                  sx={{ 
+                    mb: 3,
+                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                    border: '1px solid rgba(244, 67, 54, 0.3)',
+                    color: '#ff6b6b',
+                  }}
+                >
+                  {error}
+                </Alert>
+              </motion.div>
+            )}
+
+            <motion.form
+              onSubmit={formik.handleSubmit}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+            >
             <Grid container spacing={3}>
               {/* Email */}
               <Grid item xs={12}>
@@ -189,9 +343,27 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Email color="action" />
+                        <Email sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
@@ -212,9 +384,27 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Lock color="action" />
+                        <Lock sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
@@ -235,16 +425,54 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Lock color="action" />
+                        <Lock sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
 
               {/* Role */}
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
+                <FormControl 
+                  fullWidth
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
+                  }}
+                >
                   <InputLabel>I am a</InputLabel>
                   <Select
                     id="role"
@@ -253,6 +481,12 @@ const RegisterPage: React.FC = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     error={formik.touched.role && Boolean(formik.errors.role)}
+                    sx={{
+                      color: 'white',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                      },
+                    }}
                   >
                     <MenuItem value="BUYER">Buyer (Looking for materials)</MenuItem>
                     <MenuItem value="SELLER">Seller (Selling materials)</MenuItem>
@@ -262,7 +496,27 @@ const RegisterPage: React.FC = () => {
 
               {/* Country */}
               <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
+                <FormControl 
+                  fullWidth
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
+                  }}
+                >
                   <InputLabel>Country</InputLabel>
                   <Select
                     id="country"
@@ -271,6 +525,12 @@ const RegisterPage: React.FC = () => {
                     onChange={formik.handleChange}
                     onBlur={formik.handleBlur}
                     error={formik.touched.country && Boolean(formik.errors.country)}
+                    sx={{
+                      color: 'white',
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(255, 255, 255, 0.3)',
+                      },
+                    }}
                   >
                     {countries.map((country) => (
                       <MenuItem key={country} value={country}>
@@ -296,9 +556,27 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Business color="action" />
+                        <Business sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
@@ -318,9 +596,27 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Person color="action" />
+                        <Person sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
@@ -340,9 +636,27 @@ const RegisterPage: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Phone color="action" />
+                        <Phone sx={{ color: '#6366F1' }} />
                       </InputAdornment>
                     ),
+                  }}
+                  sx={{ 
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#6366F1',
+                        borderWidth: 2,
+                      },
+                    },
+                    '& .MuiInputLabel-root': {
+                      color: 'rgba(255, 255, 255, 0.7)',
+                    },
+                    '& .MuiInputLabel-root.Mui-focused': {
+                      color: '#6366F1',
+                    },
                   }}
                 />
               </Grid>
@@ -356,11 +670,28 @@ const RegisterPage: React.FC = () => {
                       name="agreeToTerms"
                       checked={formik.values.agreeToTerms}
                       onChange={formik.handleChange}
-                      color="primary"
+                      sx={{
+                        color: '#6366F1',
+                        '&.Mui-checked': {
+                          color: '#6366F1',
+                        },
+                      }}
                     />
                   }
                   label={
-                    <Typography variant="body2">
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        '& a': {
+                          color: '#6366F1',
+                          textDecoration: 'none',
+                          '&:hover': {
+                            textDecoration: 'underline',
+                          }
+                        }
+                      }}
+                    >
                       I agree to the{' '}
                       <Link href="/terms" target="_blank" rel="noopener">
                         Terms and Conditions
@@ -380,47 +711,105 @@ const RegisterPage: React.FC = () => {
               </Grid>
             </Grid>
 
-            <Button
-              type="submit"
-              fullWidth
-              variant="contained"
-              size="large"
-              disabled={isLoading}
-              sx={{ mt: 3, mb: 2 }}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
-            </Button>
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                size="large"
+                disabled={isLoading}
+                sx={{ 
+                  mt: 4, 
+                  mb: 3,
+                  background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                  color: '#000000',
+                  fontWeight: 600,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #818CF8 0%, #22C55E 100%)',
+                    transform: 'translateY(-2px)',
+                  },
+                  '&:disabled': {
+                    background: 'rgba(99, 102, 241, 0.3)',
+                    color: 'rgba(0, 0, 0, 0.5)',
+                  }
+                }}
+              >
+                {isLoading ? 'Creating Account...' : 'Create Account'}
+              </Button>
+            </motion.div>
 
-            <Divider sx={{ my: 3 }}>
-              <Typography variant="body2" color="text.secondary">
+            <Divider sx={{ my: 4 }}>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  px: 2,
+                }}
+              >
                 OR
               </Typography>
             </Divider>
 
-            <GoogleOAuthButton
-              onError={setError}
-              onSuccess={() => navigate('/dashboard')}
-              fullWidth
-              size="large"
-              sx={{ mb: 2 }}
-            />
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <GoogleOAuthButton
+                onError={setError}
+                onSuccess={() => {
+                  const from = (location.state as any)?.from?.pathname || '/dashboard';
+                  navigate(from, { replace: true });
+                }}
+                fullWidth
+                size="large"
+                sx={{ 
+                  mb: 4,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  color: '#6366F1',
+                  '&:hover': {
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderColor: '#6366F1',
+                  }
+                }}
+              />
+            </motion.div>
 
             <Box textAlign="center">
-              <Typography variant="body2" color="text.secondary">
-                Already have an account?{' '}
-                <Link
-                  component={RouterLink}
-                  to="/login"
-                  variant="body2"
-                  color="primary"
-                  sx={{ fontWeight: 600 }}
-                >
-                  Sign in here
-                </Link>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  mb: 1,
+                }}
+              >
+                Already have an account?
               </Typography>
+              <Link
+                component={RouterLink}
+                to="/login"
+                variant="body2"
+                sx={{ 
+                  color: '#6366F1',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  }
+                }}
+              >
+                Sign in here
+              </Link>
             </Box>
-          </form>
-        </Paper>
+            </motion.form>
+          </Paper>
+        </motion.div>
       </Container>
     </Box>
   );

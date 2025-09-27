@@ -12,8 +12,8 @@ const createProductSchema = Joi.object({
     'string.max': 'Product description must not exceed 2000 characters',
     'any.required': 'Product description is required',
   }),
-  categoryId: Joi.string().uuid().required().messages({
-    'string.uuid': 'Category ID must be a valid UUID',
+  categoryId: Joi.string().min(1).required().messages({
+    'string.min': 'Category ID must not be empty',
     'any.required': 'Category is required',
   }),
   price: Joi.number().positive().precision(2).required().messages({
@@ -21,8 +21,7 @@ const createProductSchema = Joi.object({
     'number.precision': 'Price must have at most 2 decimal places',
     'any.required': 'Price is required',
   }),
-  quantity: Joi.number().integer().positive().required().messages({
-    'number.integer': 'Quantity must be a whole number',
+  quantity: Joi.number().positive().required().messages({
     'number.positive': 'Quantity must be positive',
     'any.required': 'Quantity is required',
   }),
@@ -42,6 +41,21 @@ const createProductSchema = Joi.object({
         'Listing type must be one of: FIXED_PRICE, AUCTION, NEGOTIABLE',
       'any.required': 'Listing type is required',
     }),
+  location: Joi.string().min(2).max(100).required().messages({
+    'string.min': 'Location must be at least 2 characters long',
+    'string.max': 'Location must not exceed 100 characters',
+    'any.required': 'Location is required',
+  }),
+  country: Joi.string().min(2).max(50).required().messages({
+    'string.min': 'Country must be at least 2 characters long',
+    'string.max': 'Country must not exceed 50 characters',
+    'any.required': 'Country is required',
+  }),
+  minOrderQuantity: Joi.number().positive().precision(2).required().messages({
+    'number.positive': 'Minimum order quantity must be positive',
+    'number.precision': 'Minimum order quantity must have at most 2 decimal places',
+    'any.required': 'Minimum order quantity is required',
+  }),
   tags: Joi.array()
     .items(Joi.string().min(2).max(20))
     .max(10)
@@ -60,8 +74,8 @@ const createProductSchema = Joi.object({
   // Auction-specific fields
   auctionStartTime: Joi.when('listingType', {
     is: 'AUCTION',
-    then: Joi.date().greater('now').required().messages({
-      'date.greater': 'Auction start time must be in the future',
+    then: Joi.date().required().messages({
+      'date.base': 'Auction start time must be a valid date',
       'any.required': 'Auction start time is required for auction listings',
     }),
     otherwise: Joi.forbidden(),
@@ -102,8 +116,8 @@ const updateProductSchema = Joi.object({
     'string.min': 'Product description must be at least 20 characters long',
     'string.max': 'Product description must not exceed 2000 characters',
   }),
-  categoryId: Joi.string().uuid().optional().messages({
-    'string.uuid': 'Category ID must be a valid UUID',
+  categoryId: Joi.string().min(1).optional().messages({
+    'string.min': 'Category ID must not be empty',
   }),
   price: Joi.number().positive().precision(2).optional().messages({
     'number.positive': 'Price must be a positive number',
@@ -159,8 +173,8 @@ const getProductsSchema = Joi.object({
     'string.min': 'Search term must be at least 2 characters long',
     'string.max': 'Search term must not exceed 100 characters',
   }),
-  category: Joi.string().uuid().optional().messages({
-    'string.uuid': 'Category ID must be a valid UUID',
+  category: Joi.string().min(1).optional().messages({
+    'string.min': 'Category ID must not be empty',
   }),
   minPrice: Joi.number().positive().precision(2).optional().messages({
     'number.positive': 'Minimum price must be positive',
@@ -170,6 +184,12 @@ const getProductsSchema = Joi.object({
     'number.positive': 'Maximum price must be positive',
     'number.precision': 'Maximum price must have at most 2 decimal places',
   }),
+  currency: Joi.string()
+    .valid('USD', 'INR', 'CNY', 'TRY')
+    .optional()
+    .messages({
+      'any.only': 'Currency must be one of: USD, INR, CNY, TRY',
+    }),
   listingType: Joi.string()
     .valid('FIXED_PRICE', 'AUCTION', 'NEGOTIABLE')
     .optional()
@@ -188,10 +208,10 @@ const getProductsSchema = Joi.object({
     'string.max': 'Country must not exceed 50 characters',
   }),
   sortBy: Joi.string()
-    .valid('createdAt', 'price', 'title', 'updatedAt')
+    .valid('createdAt', 'basePrice', 'title', 'updatedAt')
     .optional()
     .messages({
-      'any.only': 'Sort by must be one of: createdAt, price, title, updatedAt',
+      'any.only': 'Sort by must be one of: createdAt, basePrice, title, updatedAt',
     }),
   sortOrder: Joi.string().valid('asc', 'desc').optional().messages({
     'any.only': 'Sort order must be either asc or desc',
@@ -200,8 +220,8 @@ const getProductsSchema = Joi.object({
 
 // Watchlist validation
 const addToWatchlistSchema = Joi.object({
-  productId: Joi.string().uuid().required().messages({
-    'string.uuid': 'Product ID must be a valid UUID',
+  productId: Joi.string().min(1).required().messages({
+    'string.min': 'Product ID must not be empty',
     'any.required': 'Product ID is required',
   }),
 });
@@ -218,11 +238,11 @@ const getUserProductsSchema = Joi.object({
     'number.max': 'Limit must not exceed 100',
   }),
   status: Joi.string()
-    .valid('ACTIVE', 'INACTIVE', 'SOLD', 'EXPIRED', 'PENDING')
+    .valid('ACTIVE', 'INACTIVE', 'SOLD', 'EXPIRED')
     .optional()
     .messages({
       'any.only':
-        'Status must be one of: ACTIVE, INACTIVE, SOLD, EXPIRED, PENDING',
+        'Status must be one of: ACTIVE, INACTIVE, SOLD, EXPIRED',
     }),
   listingType: Joi.string()
     .valid('FIXED_PRICE', 'AUCTION', 'NEGOTIABLE')

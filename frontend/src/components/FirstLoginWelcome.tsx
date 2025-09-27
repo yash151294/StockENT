@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Box, Typography, Button, Alert } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
+import Logo from './Logo';
 
 const FirstLoginWelcome: React.FC = () => {
   const { state, clearFirstLoginMessage } = useAuth();
@@ -48,9 +49,12 @@ const FirstLoginWelcome: React.FC = () => {
           },
         }}
       >
-        <Typography variant="h6" gutterBottom>
-          Welcome to StockENT!
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Logo size={24} color="#2e7d32" variant="icon" clickable={true} />
+          <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+            Welcome to StockENT!
+          </Typography>
+        </Box>
         <Typography variant="body2">
           You have successfully signed in with Google. Here's what's happening with your account today.
         </Typography>

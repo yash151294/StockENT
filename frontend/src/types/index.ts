@@ -73,12 +73,20 @@ export interface Auction {
   reservePrice?: number;
   currentBid?: number;
   bidIncrement: number;
-  startsAt: string;
-  endsAt: string;
+  startTime: string;
+  endTime: string;
+  startsAt: string; // Transformed field from backend
+  endsAt: string; // Transformed field from backend
+  minimumBid: number; // Transformed field from backend
   status: 'SCHEDULED' | 'ACTIVE' | 'ENDED' | 'CANCELLED';
   winnerId?: string;
+  bidCount: number;
   createdAt: string;
   updatedAt: string;
+  product?: Product; // Relation from backend
+  _count?: {
+    bids: number;
+  };
 }
 
 // API Response types
@@ -102,7 +110,7 @@ export interface ProductsResponse {
     page: number;
     limit: number;
     total: number;
-    totalPages: number;
+    pages: number;
   };
 }
 
@@ -116,7 +124,7 @@ export interface AuctionsResponse {
     page: number;
     limit: number;
     total: number;
-    totalPages: number;
+    pages: number;
   };
 }
 
@@ -130,6 +138,7 @@ export interface Message {
   attachments: string[];
   readAt?: string;
   createdAt: string;
+  isEncrypted?: boolean;
   sender?: {
     id: string;
     companyName: string;

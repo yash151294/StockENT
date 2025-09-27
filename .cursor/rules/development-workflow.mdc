@@ -1,0 +1,141 @@
+---
+description: Development workflow and best practices
+---
+
+# Development Workflow & Best Practices
+
+## Development Environment Setup
+
+### Prerequisites
+- **Node.js**: v18 or higher
+- **PostgreSQL**: Database server
+- **Redis**: Caching and session storage
+- **Git**: Version control
+
+### Environment Configuration
+- **Backend**: [backend/env.example](mdc:backend/env.example) - Copy to `.env`
+- **Frontend**: [frontend/env.example](mdc:frontend/env.example) - Copy to `.env`
+- **Database**: Configure `DATABASE_URL` in backend `.env`
+- **Redis**: Configure `REDIS_URL` in backend `.env`
+
+### Development Scripts
+```bash
+# Backend
+npm run dev          # Start development server
+npm run db:migrate   # Run database migrations
+npm run db:seed      # Seed database with sample data
+npm run db:studio     # Open Prisma Studio
+npm run lint         # Run ESLint
+npm run test         # Run tests
+
+# Frontend
+npm run dev          # Start Next.js development server
+npm run build        # Build for production
+npm run lint         # Run ESLint
+npm run type-check   # TypeScript type checking
+```
+
+## Code Quality Standards
+
+### TypeScript Guidelines
+- **Strict Mode**: Enable strict TypeScript configuration
+- **Type Definitions**: Define interfaces for all data structures
+- **Generic Types**: Use generics for reusable components
+- **Type Guards**: Implement proper type checking
+- **No Any Types**: Avoid `any` type usage
+
+### Code Style
+- **ESLint**: Configured with TypeScript and React rules
+- **Prettier**: Code formatting with consistent style
+- **Import Order**: Organized imports (external, internal, relative)
+- **Naming Conventions**: camelCase for variables, PascalCase for components
+- **File Naming**: kebab-case for files, PascalCase for components
+
+### Git Workflow
+- **Branch Naming**: `feature/description`, `bugfix/description`, `hotfix/description`
+- **Commit Messages**: Conventional commits format
+- **Pull Requests**: Required for all changes
+- **Code Review**: All changes must be reviewed
+- **Testing**: Tests must pass before merging
+
+## Testing Strategy
+
+### Backend Testing
+- **Unit Tests**: Individual function testing
+- **Integration Tests**: API endpoint testing
+- **Database Tests**: Prisma model testing
+- **Socket Tests**: Real-time feature testing
+- **Coverage**: Minimum 80% code coverage
+
+### Frontend Testing
+- **Component Tests**: React component testing
+- **Integration Tests**: User interaction testing
+- **E2E Tests**: Full user journey testing
+- **Visual Tests**: UI component testing
+- **Accessibility Tests**: WCAG compliance testing
+
+## Performance Optimization
+
+### Backend Performance
+- **Database Indexing**: Optimize query performance
+- **Redis Caching**: Cache frequently accessed data
+- **Connection Pooling**: Optimize database connections
+- **Rate Limiting**: Prevent API abuse
+- **Compression**: Enable gzip compression
+
+### Frontend Performance
+- **Code Splitting**: Lazy load components
+- **Bundle Optimization**: Minimize bundle size
+- **Image Optimization**: Optimize images and lazy loading
+- **Caching**: Implement proper caching strategies
+- **CDN**: Use CDN for static assets
+
+## Security Best Practices
+
+### Development Security
+- **Environment Variables**: Never commit secrets
+- **Input Validation**: Validate all user inputs
+- **SQL Injection**: Use Prisma ORM (prevents SQL injection)
+- **XSS Prevention**: Sanitize user inputs
+- **CSRF Protection**: Implement CSRF tokens
+- **Rate Limiting**: Prevent abuse and DoS attacks
+
+### Production Security
+- **HTTPS**: Force HTTPS in production
+- **Security Headers**: Implement security headers
+- **Authentication**: Secure JWT implementation
+- **File Uploads**: Validate and sanitize uploads
+- **Monitoring**: Implement security monitoring
+
+## Deployment Guidelines
+
+### Environment Configuration
+- **Development**: Local development with hot reload
+- **Staging**: Pre-production testing environment
+- **Production**: Live production environment
+- **Environment Variables**: Separate configs per environment
+- **Database**: Separate databases per environment
+
+### Deployment Process
+1. **Code Review**: All changes reviewed
+2. **Testing**: All tests must pass
+3. **Build**: Production build creation
+4. **Deployment**: Automated deployment pipeline
+5. **Monitoring**: Post-deployment monitoring
+6. **Rollback**: Quick rollback capability
+
+## Monitoring & Logging
+
+### Application Monitoring
+- **Health Checks**: API health monitoring
+- **Performance Metrics**: Response time tracking
+- **Error Tracking**: Error logging and alerting
+- **User Analytics**: User behavior tracking
+- **Database Monitoring**: Query performance tracking
+
+### Logging Strategy
+- **Winston Logger**: Structured logging
+- **Log Levels**: Error, Warn, Info, Debug
+- **Log Rotation**: Prevent log file bloat
+- **Centralized Logging**: Aggregate logs for analysis
+- **Security Logging**: Track security events

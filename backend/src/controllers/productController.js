@@ -158,6 +158,7 @@ const getProduct = async (req, res) => {
         images: {
           orderBy: { isPrimary: 'desc' },
         },
+        specifications: true,
         auction: {
           include: {
             bids: {
@@ -207,9 +208,18 @@ const getProduct = async (req, res) => {
       });
     }
 
+    // Add isInWatchlist property based on whether user has this product in watchlist
+    const isInWatchlist = product.watchlistItems && product.watchlistItems.length > 0;
+    
+    // Remove watchlistItems from response to avoid exposing internal data
+    const { watchlistItems, ...productData } = product;
+    
     res.json({
       success: true,
-      data: product,
+      data: {
+        ...productData,
+        isInWatchlist,
+      },
     });
   } catch (error) {
     logger.error('Get product error:', error);
@@ -225,6 +235,7 @@ const getProduct = async (req, res) => {
  */
 const createProduct = async (req, res) => {
   try {
+    // Parse FormData fields that need type conversion
     const {
       title,
       description,
@@ -244,9 +255,94 @@ const createProduct = async (req, res) => {
       reservePrice,
     } = req.body;
 
+
+    // Convert string values to appropriate types for validation
+    let parsedTags = [];
+    let parsedSpecifications = {};
+
+    try {
+      parsedTags = tags ? JSON.parse(tags) : [];
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid tags format. Must be a valid JSON array.',
+      });
+    }
+
+    try {
+      parsedSpecifications = specifications ? JSON.parse(specifications) : {};
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid specifications format. Must be a valid JSON object.',
+      });
+    }
+
+    const processedData = {
+      title,
+      description,
+      categoryId,
+      price: parseFloat(price),
+      quantity: parseFloat(quantity), // Changed from parseInt to parseFloat
+      unit,
+      listingType,
+      tags: parsedTags,
+      specifications: parsedSpecifications,
+      location,
+      country,
+      minOrderQuantity: parseFloat(minOrderQuantity),
+      auctionStartTime: auctionStartTime ? new Date(auctionStartTime) : undefined,
+      auctionEndTime: auctionEndTime ? new Date(auctionEndTime) : undefined,
+      minimumBid: minimumBid ? parseFloat(minimumBid) : undefined,
+      reservePrice: reservePrice ? parseFloat(reservePrice) : undefined,
+    };
+
+
+    // Validate the processed data
+    const { createProductSchema } = require('../validators/productValidators');
+    const { error } = createProductSchema.validate(processedData, {
+      abortEarly: false,
+      stripUnknown: true,
+    });
+
+    if (error) {
+      const { logger } = require('../utils/logger');
+      logger.warn('Product validation errors:', error.details);
+
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: error.details.map((detail) => ({
+          field: detail.path.join('.'),
+          message: detail.message,
+          value: detail.context?.value,
+        })),
+      });
+    }
+
+    // Use processed data for the rest of the function
+    const {
+      title: validatedTitle,
+      description: validatedDescription,
+      categoryId: validatedCategoryId,
+      price: validatedPrice,
+      quantity: validatedQuantity,
+      unit: validatedUnit,
+      listingType: validatedListingType,
+      tags: validatedTags,
+      specifications: validatedSpecifications,
+      location: validatedLocation,
+      country: validatedCountry,
+      minOrderQuantity: validatedMinOrderQuantity,
+      auctionStartTime: validatedAuctionStartTime,
+      auctionEndTime: validatedAuctionEndTime,
+      minimumBid: validatedMinimumBid,
+      reservePrice: validatedReservePrice,
+    } = processedData;
+
     // Validate category exists
     const category = await prisma.category.findUnique({
-      where: { id: categoryId },
+      where: { id: validatedCategoryId },
     });
 
     if (!category) {
@@ -259,36 +355,67 @@ const createProduct = async (req, res) => {
     // Create product
     const product = await prisma.product.create({
       data: {
-        title,
-        description,
-        categoryId,
-        basePrice: parseFloat(price),
-        quantityAvailable: parseInt(quantity),
-        unit,
-        listingType,
-        tags: tags || [],
+        title: validatedTitle,
+        description: validatedDescription,
+        categoryId: validatedCategoryId,
+        basePrice: validatedPrice,
+        quantityAvailable: validatedQuantity,
+        unit: validatedUnit,
+        listingType: validatedListingType,
+        tags: validatedTags,
         sellerId: req.user.id,
-        status: 'PENDING', // Products need admin approval
-        // Use provided values or defaults
-        minOrderQuantity: parseFloat(minOrderQuantity || quantity * 0.1),
+        status: 'ACTIVE', // Products are active by default
+        minOrderQuantity: validatedMinOrderQuantity,
         currency: 'USD',
-        location: location || 'TBD',
-        country: country || 'TBD',
+        location: validatedLocation,
+        country: validatedCountry,
       },
     });
 
+    // Create specifications if provided
+    if (validatedSpecifications && Object.keys(validatedSpecifications).length > 0) {
+      const specificationData = Object.entries(validatedSpecifications).map(([specName, specValue]) => ({
+        productId: product.id,
+        specName,
+        specValue,
+      }));
+
+      await prisma.productSpecification.createMany({
+        data: specificationData,
+      });
+    }
+
+    // Process uploaded images if any
+    if (req.files && req.files.length > 0) {
+      const { processProductImages } = require('../middleware/upload');
+      const processedImages = await processProductImages(req.files);
+
+      // Create product images
+      const imageData = processedImages.map((image, index) => ({
+        productId: product.id,
+        imageUrl: image.imageUrl,
+        alt: image.alt,
+        isPrimary: index === 0,
+        orderIndex: index,
+      }));
+
+      await prisma.productImage.createMany({
+        data: imageData,
+      });
+    }
+
     // Create auction if listing type is AUCTION
-    if (listingType === 'AUCTION' && auctionStartTime && auctionEndTime) {
+    if (validatedListingType === 'AUCTION' && validatedAuctionStartTime && validatedAuctionEndTime) {
       await prisma.auction.create({
         data: {
           productId: product.id,
           auctionType: 'ENGLISH',
-          startingPrice: parseFloat(minimumBid || 0),
-          reservePrice: parseFloat(reservePrice || 0),
-          currentBid: parseFloat(minimumBid || 0),
-          bidIncrement: parseFloat(minimumBid || 0) * 0.05, // 5% increment
-          startTime: new Date(auctionStartTime),
-          endTime: new Date(auctionEndTime),
+          startingPrice: validatedMinimumBid || 0,
+          reservePrice: validatedReservePrice || 0,
+          currentBid: validatedMinimumBid || 0,
+          bidIncrement: (validatedMinimumBid || 0) * 0.05, // 5% increment
+          startTime: validatedAuctionStartTime,
+          endTime: validatedAuctionEndTime,
           status: 'SCHEDULED',
         },
       });
@@ -345,7 +472,7 @@ const updateProduct = async (req, res) => {
       where: { id },
       data: {
         ...updateData,
-        status: 'PENDING', // Reset to pending for admin review
+        status: 'ACTIVE', // Reset to active for admin review
       },
     });
 
@@ -391,7 +518,7 @@ const deleteProduct = async (req, res) => {
       prisma.conversation.count({
         where: {
           productId: id,
-          status: { in: ['ACTIVE', 'PENDING'] },
+          status: { in: ['ACTIVE'] },
         },
       }),
       prisma.bid.count({
@@ -612,6 +739,77 @@ const removeFromWatchlist = async (req, res) => {
 };
 
 /**
+ * Toggle product in watchlist (add if not present, remove if present)
+ */
+const toggleWatchlist = async (req, res) => {
+  try {
+    const { productId } = req.body;
+
+    // Check if product exists
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        error: 'Product not found',
+      });
+    }
+
+    // Check if already in watchlist
+    const existingItem = await prisma.watchlistItem.findFirst({
+      where: {
+        userId: req.user.id,
+        productId,
+      },
+    });
+
+    if (existingItem) {
+      // Remove from watchlist
+      await prisma.watchlistItem.delete({
+        where: { id: existingItem.id },
+      });
+
+      logger.info(
+        `Product removed from watchlist: ${productId} by user: ${req.user.id}`
+      );
+
+      res.json({
+        success: true,
+        message: 'Product removed from watchlist',
+        action: 'removed',
+      });
+    } else {
+      // Add to watchlist
+      const watchlistItem = await prisma.watchlistItem.create({
+        data: {
+          userId: req.user.id,
+          productId,
+        },
+      });
+
+      logger.info(
+        `Product added to watchlist: ${productId} by user: ${req.user.id}`
+      );
+
+      res.status(201).json({
+        success: true,
+        data: watchlistItem,
+        message: 'Product added to watchlist',
+        action: 'added',
+      });
+    }
+  } catch (error) {
+    logger.error('Toggle watchlist error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+};
+
+/**
  * Get user's watchlist
  */
 const getWatchlist = async (req, res) => {
@@ -706,5 +904,6 @@ module.exports = {
   getUserProducts,
   addToWatchlist,
   removeFromWatchlist,
+  toggleWatchlist,
   getWatchlist,
 };

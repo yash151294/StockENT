@@ -13,7 +13,9 @@ interface SocketContextType {
   leaveConversation: (conversationId: string) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
   emitBid: (auctionId: string, amount: number) => void;
-  emitMessage: (conversationId: string, content: string, type?: string) => void;
+  emitMessage: (conversationId: string, content: string, type?: string, encryptionData?: any) => void;
+  emitKeyExchange: (conversationId: string, toUserId: string, encryptedAESKey: string, keyId: string, publicKey: string) => void;
+  emitKeyExchangeResponse: (keyExchangeId: string, status?: string) => void;
 }
 
 // Context
@@ -163,13 +165,34 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const emitMessage = (conversationId: string, content: string, type: string = 'TEXT') => {
+  const emitMessage = (conversationId: string, content: string, type: string = 'TEXT', encryptionData?: any) => {
     if (socket && isConnected) {
-      socket.emit('send-message', {
+      socket.emit('new_message', {
         conversationId,
         content,
-        type,
-        senderId: state.user?.id,
+        messageType: type,
+        encryptionData,
+      });
+    }
+  };
+
+  const emitKeyExchange = (conversationId: string, toUserId: string, encryptedAESKey: string, keyId: string, publicKey: string) => {
+    if (socket && isConnected) {
+      socket.emit('key_exchange_request', {
+        conversationId,
+        toUserId,
+        encryptedAESKey,
+        keyId,
+        publicKey,
+      });
+    }
+  };
+
+  const emitKeyExchangeResponse = (keyExchangeId: string, status: string = 'PROCESSED') => {
+    if (socket && isConnected) {
+      socket.emit('key_exchange_response', {
+        keyExchangeId,
+        status,
       });
     }
   };
@@ -184,6 +207,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     emitTyping,
     emitBid,
     emitMessage,
+    emitKeyExchange,
+    emitKeyExchangeResponse,
   };
 
   return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;

@@ -1,0 +1,51 @@
+---
+globs: backend/**/*.js,backend/**/*.json
+---
+
+# Backend Development Guidelines
+
+## Architecture Patterns
+- **Controllers**: Handle HTTP requests/responses, delegate to services
+- **Services**: Business logic and data processing
+- **Middleware**: Authentication, validation, error handling, rate limiting
+- **Routes**: API endpoint definitions with proper HTTP methods
+- **Validators**: Input validation using Joi and express-validator
+
+## Key Files
+- **Server Setup**: [backend/src/server.js](mdc:backend/src/server.js) - Express server with Socket.io, Redis, middleware
+- **Database**: [backend/prisma/schema.prisma](mdc:backend/prisma/schema.prisma) - All models and relationships
+- **Auth Middleware**: [backend/src/middleware/auth.js](mdc:backend/src/middleware/auth.js) - JWT authentication
+- **Error Handling**: [backend/src/middleware/errorHandler.js](mdc:backend/src/middleware/errorHandler.js) - Centralized error handling
+
+## Development Standards
+- Use **async/await** for all database operations
+- Implement proper **error handling** with try-catch blocks
+- Use **Prisma Client** for all database interactions
+- Follow **RESTful API** conventions for endpoints
+- Implement **input validation** for all user inputs
+- Use **Winston logger** for all logging operations
+- Apply **rate limiting** to prevent abuse
+- Use **Redis** for caching and session management
+
+## Security Requirements
+- **JWT tokens** for authentication with refresh tokens
+- **Role-based access control** (ADMIN/SELLER/BUYER)
+- **Input sanitization** to prevent XSS attacks
+- **Rate limiting** on all API endpoints
+- **CORS configuration** for cross-origin requests
+- **Helmet** for security headers
+- **File upload validation** with proper MIME type checking
+
+## Database Guidelines
+- Use **Prisma migrations** for schema changes
+- Implement **soft deletes** where appropriate
+- Use **transactions** for multi-table operations
+- Follow **naming conventions** (camelCase for fields, PascalCase for models)
+- Use **enums** for status fields and fixed values
+- Implement **proper relationships** with foreign keys
+
+## Real-time Features
+- Use **Socket.io** for live auction updates
+- Implement **room-based messaging** for conversations
+- Handle **typing indicators** and real-time notifications
+- Use **Redis** for session management and caching

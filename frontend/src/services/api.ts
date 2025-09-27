@@ -159,8 +159,15 @@ export const productsAPI = {
   getProduct: (id: string): Promise<AxiosResponse<ApiResponse<Product>>> =>
     api.get(`/products/${id}`),
 
-  createProduct: (data: any): Promise<AxiosResponse<ApiResponse>> =>
-    api.post('/products', data),
+  createProduct: (data: any): Promise<AxiosResponse<ApiResponse>> => {
+    // Check if data is FormData (for file uploads)
+    if (data instanceof FormData) {
+      return api.post('/products', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    }
+    return api.post('/products', data);
+  },
 
   updateProduct: (id: string, data: any): Promise<AxiosResponse<ApiResponse>> =>
     api.put(`/products/${id}`, data),
@@ -184,8 +191,23 @@ export const productsAPI = {
   getMyProducts: (params?: any): Promise<AxiosResponse<ApiResponse>> =>
     api.get('/products/my-products', { params }),
 
-  toggleWatchlist: (productId: string): Promise<AxiosResponse<ApiResponse>> =>
+  getWatchlist: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/products/watchlist'),
+
+  addToWatchlist: (productId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.post('/products/watchlist', { productId }),
+
+  removeFromWatchlist: (productId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.delete(`/products/watchlist/${productId}`),
+
+  toggleWatchlist: (productId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.post('/products/watchlist/toggle', { productId }),
+
+  getTags: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/products/tags'),
+
+  getSpecifications: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/products/specifications'),
 };
 
 // Categories API
@@ -218,7 +240,7 @@ export const auctionsAPI = {
     api.delete(`/auctions/${id}`),
 
   placeBid: (auctionId: string, data: { amount: number; maxBid?: number }): Promise<AxiosResponse<ApiResponse>> =>
-    api.post(`/auctions/${auctionId}/bids`, data),
+    api.post(`/auctions/${auctionId}/bid`, data),
 
   getBids: (auctionId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.get(`/auctions/${auctionId}/bids`),
@@ -244,6 +266,12 @@ export const messagesAPI = {
   sendMessage: (conversationId: string, data: any): Promise<AxiosResponse<ApiResponse>> =>
     api.post(`/messages/conversations/${conversationId}/messages`, data),
 
+  deleteMessage: (conversationId: string, messageId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.delete(`/messages/conversations/${conversationId}/messages/${messageId}`),
+
+  deleteConversation: (conversationId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.delete(`/messages/conversations/${conversationId}`),
+
   markAsRead: (conversationId: string, messageId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.put(`/messages/conversations/${conversationId}/messages/${messageId}/read`),
 
@@ -254,6 +282,19 @@ export const messagesAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Encryption API
+  createKeyExchange: (data: any): Promise<AxiosResponse<ApiResponse>> =>
+    api.post('/messages/key-exchange', data),
+
+  processKeyExchange: (keyExchangeId: string, data: any): Promise<AxiosResponse<ApiResponse>> =>
+    api.put(`/messages/key-exchange/${keyExchangeId}/process`, data),
+
+  getPendingKeyExchanges: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/messages/key-exchange/pending'),
+
+  getEncryptionStatus: (conversationId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.get(`/messages/conversations/${conversationId}/encryption-status`),
 };
 
 // Search API
@@ -276,60 +317,8 @@ export const searchAPI = {
 
 // Dashboard API
 export const dashboardAPI = {
-  getDashboardStats: (): Promise<AxiosResponse<ApiResponse>> => {
-    // Add small delays between API calls to prevent rate limiting
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-    
-    return Promise.allSettled([
-      productsAPI.getMyProducts(),
-      delay(100).then(() => auctionsAPI.getMyBids()),
-      delay(200).then(() => messagesAPI.getConversations()),
-      delay(300).then(() => api.get('/products/watchlist')),
-    ]).then(([productsResult, bidsResult, conversationsResult, watchlistResult]) => {
-      // Handle successful responses
-      const productsRes = productsResult.status === 'fulfilled' ? productsResult.value : null;
-      const bidsRes = bidsResult.status === 'fulfilled' ? bidsResult.value : null;
-      const conversationsRes = conversationsResult.status === 'fulfilled' ? conversationsResult.value : null;
-      const watchlistRes = watchlistResult.status === 'fulfilled' ? watchlistResult.value : null;
-      
-      // Log any failures for debugging
-      if (productsResult.status === 'rejected') {
-        console.error('Products API failed:', productsResult.reason);
-      }
-      if (bidsResult.status === 'rejected') {
-        console.error('Bids API failed:', bidsResult.reason);
-      }
-      if (conversationsResult.status === 'rejected') {
-        console.error('Conversations API failed:', conversationsResult.reason);
-      }
-      if (watchlistResult.status === 'rejected') {
-        console.error('Watchlist API failed:', watchlistResult.reason);
-      }
-      
-      const dashboardData = {
-        totalProducts: productsRes?.data?.data?.products?.length || 0,
-        activeAuctions: bidsRes?.data?.data?.bids?.filter((bid: any) => 
-          bid.auction?.status === 'ACTIVE'
-        )?.length || 0,
-        totalMessages: conversationsRes?.data?.data?.conversations?.length || 0,
-        watchlistItems: watchlistRes?.data?.data?.watchlistItems?.length || 0,
-        recentProducts: productsRes?.data?.data?.products?.slice(0, 5) || [],
-        recentBids: bidsRes?.data?.data?.bids?.slice(0, 5) || [],
-        recentConversations: conversationsRes?.data?.data?.conversations?.slice(0, 5) || [],
-      };
-      
-      return {
-        data: {
-          success: true,
-          data: dashboardData,
-        },
-        status: 200,
-        statusText: 'OK',
-        headers: {},
-        config: {},
-      } as AxiosResponse<ApiResponse>;
-    });
-  },
+  getDashboardStats: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/dashboard'),
 };
 
 // Admin API

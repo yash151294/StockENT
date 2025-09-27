@@ -13,6 +13,11 @@ const {
   getUnreadMessageCount,
   searchConversations,
   deleteConversation,
+  deleteMessage,
+  createKeyExchange,
+  processKeyExchange,
+  getPendingKeyExchanges,
+  getConversationEncryptionStatus,
 } = require('../services/messageService');
 
 const router = express.Router();
@@ -24,15 +29,17 @@ const router = express.Router();
  */
 router.post(
   '/conversations',
-  [authenticateToken, validate],
+  [authenticateToken],
   async (req, res) => {
     try {
       const { productId, sellerId } = req.body;
+      
       const conversation = await createConversation(
         productId,
         req.user.id,
         sellerId
       );
+      
       res.status(201).json({
         success: true,
         data: conversation,
@@ -262,6 +269,135 @@ router.delete(
       res.json({
         success: true,
         message: 'Conversation deleted successfully',
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   DELETE /api/messages/conversations/:conversationId/messages/:messageId
+ * @desc    Delete individual message
+ * @access  Private
+ */
+router.delete(
+  '/conversations/:conversationId/messages/:messageId',
+  [authenticateToken, validate],
+  async (req, res) => {
+    try {
+      await deleteMessage(req.params.messageId, req.user.id);
+      res.json({
+        success: true,
+        message: 'Message deleted successfully',
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/messages/key-exchange
+ * @desc    Create key exchange request
+ * @access  Private
+ */
+router.post(
+  '/key-exchange',
+  [authenticateToken, messageLimiter, validate],
+  async (req, res) => {
+    try {
+      const { conversationId, toUserId, encryptedAESKey, keyId, publicKey } = req.body;
+      const keyExchange = await createKeyExchange(
+        conversationId,
+        req.user.id,
+        toUserId,
+        encryptedAESKey,
+        keyId,
+        publicKey
+      );
+      res.status(201).json({
+        success: true,
+        data: keyExchange,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/messages/key-exchange/:id/process
+ * @desc    Process key exchange
+ * @access  Private
+ */
+router.put(
+  '/key-exchange/:id/process',
+  [authenticateToken, messageLimiter, validate],
+  async (req, res) => {
+    try {
+      const { status = 'PROCESSED' } = req.body;
+      const keyExchange = await processKeyExchange(req.params.id, status);
+      res.json({
+        success: true,
+        data: keyExchange,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/messages/key-exchange/pending
+ * @desc    Get pending key exchanges
+ * @access  Private
+ */
+router.get(
+  '/key-exchange/pending',
+  [authenticateToken, validate],
+  async (req, res) => {
+    try {
+      const keyExchanges = await getPendingKeyExchanges(req.user.id);
+      res.json({
+        success: true,
+        data: keyExchanges,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/messages/conversations/:id/encryption-status
+ * @desc    Get conversation encryption status
+ * @access  Private
+ */
+router.get(
+  '/conversations/:id/encryption-status',
+  [authenticateToken, validate],
+  async (req, res) => {
+    try {
+      const status = await getConversationEncryptionStatus(req.params.id);
+      res.json({
+        success: true,
+        data: status,
       });
     } catch (error) {
       res.status(400).json({

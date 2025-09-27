@@ -23,10 +23,109 @@ const {
   getUserProducts,
   addToWatchlist,
   removeFromWatchlist,
+  toggleWatchlist,
   getWatchlist,
 } = require('../controllers/productController');
 
 const router = express.Router();
+
+/**
+ * @route   GET /api/products/tags
+ * @desc    Get all unique tags from products
+ * @access  Public
+ */
+router.get('/tags', [apiLimiter], async (req, res) => {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    const { logger } = require('../utils/logger');
+
+    // Get all unique tags from active products
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { tags: true },
+    });
+
+    // Extract and count all tags
+    const tagCounts = {};
+    products.forEach((product) => {
+      product.tags.forEach((tag) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    });
+
+    // Sort by count and return
+    const sortedTags = Object.entries(tagCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([tag, count]) => ({ tag, count }));
+
+    res.json({
+      success: true,
+      data: sortedTags,
+    });
+  } catch (error) {
+    const { logger } = require('../utils/logger');
+    logger.error('Get tags error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * @route   GET /api/products/specifications
+ * @desc    Get all unique specification keys from products
+ * @access  Public
+ */
+router.get('/specifications', [apiLimiter], async (req, res) => {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    const { logger } = require('../utils/logger');
+
+    // Get all specifications from active products
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      select: { 
+        specifications: {
+          select: {
+            specName: true
+          }
+        }
+      },
+    });
+
+    // Extract and count all specification keys
+    const specKeyCounts = {};
+    products.forEach((product) => {
+      if (product.specifications && Array.isArray(product.specifications)) {
+        product.specifications.forEach((spec) => {
+          if (spec.specName) {
+            specKeyCounts[spec.specName] = (specKeyCounts[spec.specName] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // Sort by count and return
+    const sortedSpecKeys = Object.entries(specKeyCounts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, count]) => ({ key, count }));
+
+    res.json({
+      success: true,
+      data: sortedSpecKeys,
+    });
+  } catch (error) {
+    const { logger } = require('../utils/logger');
+    logger.error('Get specifications error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
 
 /**
  * @route   GET /api/products
@@ -76,6 +175,17 @@ router.post(
 router.delete('/watchlist/:productId', authenticateToken, removeFromWatchlist);
 
 /**
+ * @route   POST /api/products/watchlist/toggle
+ * @desc    Toggle product in watchlist (add if not present, remove if present)
+ * @access  Private
+ */
+router.post(
+  '/watchlist/toggle',
+  [authenticateToken, validateJoi(addToWatchlistSchema)],
+  toggleWatchlist
+);
+
+/**
  * @route   GET /api/products/:id
  * @desc    Get single product
  * @access  Public
@@ -93,8 +203,6 @@ router.post(
     authenticateToken,
     uploadProductImages,
     handleUploadError,
-    validateJoi(createProductSchema),
-    validate,
   ],
   createProduct
 );

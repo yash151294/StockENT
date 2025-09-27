@@ -1,0 +1,157 @@
+---
+description: Error handling and logging strategies
+---
+
+# Error Handling & Logging
+
+## Error Handling Strategy
+StockENT implements comprehensive error handling across both frontend and backend with proper logging, user feedback, and recovery mechanisms.
+
+## Backend Error Handling
+
+### Centralized Error Handler
+- **Error Middleware**: [backend/src/middleware/errorHandler.js](mdc:backend/src/middleware/errorHandler.js) - Centralized error processing
+- **Error Classification**: Different error types with appropriate responses
+- **Logging Integration**: Winston logger for error tracking
+- **User-Friendly Messages**: Sanitized error messages for clients
+
+### Error Types
+- **Validation Errors**: Input validation failures (400)
+- **Authentication Errors**: Invalid credentials or tokens (401)
+- **Authorization Errors**: Insufficient permissions (403)
+- **Not Found Errors**: Resource not found (404)
+- **Conflict Errors**: Resource conflicts (409)
+- **Server Errors**: Internal server errors (500)
+
+### Error Response Format
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input data",
+    "details": {
+      "field": "email",
+      "reason": "Invalid email format"
+    }
+  },
+  "timestamp": "2024-01-01T00:00:00Z"
+}
+```
+
+## Frontend Error Handling
+
+### Error Boundaries
+- **Global Error Boundary**: Catch unhandled React errors
+- **Component Error Boundaries**: Isolate component errors
+- **Route Error Boundaries**: Handle route-level errors
+- **Fallback UI**: User-friendly error displays
+
+### Error States
+- **Loading States**: Show loading indicators
+- **Error States**: Display error messages with retry options
+- **Empty States**: Handle empty data scenarios
+- **Network Errors**: Handle connection issues
+- **Validation Errors**: Form validation feedback
+
+### Error Recovery
+- **Automatic Retry**: Retry failed requests
+- **Manual Retry**: User-initiated retry buttons
+- **Fallback Data**: Use cached or default data
+- **Graceful Degradation**: Continue with limited functionality
+
+## Logging Strategy
+
+### Backend Logging
+- **Winston Logger**: [backend/src/utils/logger.js](mdc:backend/src/utils/logger.js) - Structured logging
+- **Log Levels**: Error, Warn, Info, Debug
+- **Log Rotation**: Prevent log file bloat
+- **Context Information**: Include request context in logs
+- **Security Logging**: Track security events
+
+### Frontend Logging
+- **Console Logging**: Development debugging
+- **Error Reporting**: Production error tracking
+- **User Actions**: Track user interactions
+- **Performance Logging**: Monitor app performance
+- **Network Logging**: API request/response logging
+
+## Error Monitoring
+
+### Production Monitoring
+- **Error Tracking**: Centralized error collection
+- **Performance Monitoring**: Track app performance
+- **User Analytics**: Monitor user behavior
+- **Alert System**: Real-time error notifications
+- **Dashboard**: Error metrics and trends
+
+### Development Debugging
+- **Source Maps**: Debug production errors
+- **Stack Traces**: Detailed error information
+- **Request Context**: Include request details
+- **User Context**: Include user information
+- **Environment Context**: Include environment details
+
+## Validation Error Handling
+
+### Backend Validation
+- **Joi Schemas**: Input validation schemas
+- **Express Validator**: Request validation middleware
+- **Custom Validators**: Business logic validation
+- **Error Aggregation**: Collect all validation errors
+- **Sanitization**: Clean input data
+
+### Frontend Validation
+- **Form Validation**: Real-time form validation
+- **Yup Schemas**: Validation schemas
+- **Error Display**: User-friendly error messages
+- **Field Highlighting**: Visual error indicators
+- **Prevention**: Prevent invalid submissions
+
+## Network Error Handling
+
+### API Error Handling
+- **HTTP Status Codes**: Proper status code usage
+- **Retry Logic**: Automatic retry for transient errors
+- **Timeout Handling**: Request timeout management
+- **Circuit Breaker**: Prevent cascade failures
+- **Fallback Responses**: Graceful degradation
+
+### Socket Error Handling
+- **Connection Errors**: Handle connection failures
+- **Reconnection Logic**: Automatic reconnection
+- **Event Errors**: Handle socket event errors
+- **Rate Limiting**: Respect server rate limits
+- **Error Recovery**: Recover from socket errors
+
+## User Experience
+
+### Error Messages
+- **User-Friendly**: Clear, actionable error messages
+- **Contextual**: Relevant to user actions
+- **Helpful**: Provide next steps
+- **Consistent**: Uniform error message style
+- **Localized**: Support multiple languages
+
+### Error UI Patterns
+- **Toast Notifications**: Non-blocking error messages
+- **Modal Dialogs**: Important error information
+- **Inline Errors**: Form field error messages
+- **Error Pages**: Full-page error displays
+- **Loading States**: Clear loading indicators
+
+## Security Considerations
+
+### Error Information
+- **No Sensitive Data**: Don't expose internal details
+- **Sanitized Messages**: Clean error messages
+- **Logging Separation**: Separate user and system logs
+- **Access Control**: Restrict error information access
+- **Audit Trail**: Track error-related actions
+
+### Error Prevention
+- **Input Validation**: Validate all inputs
+- **Authentication**: Verify user identity
+- **Authorization**: Check user permissions
+- **Rate Limiting**: Prevent abuse
+- **Resource Limits**: Enforce resource constraints

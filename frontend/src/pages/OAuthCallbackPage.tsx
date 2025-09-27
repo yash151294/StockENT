@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Box, Typography, CircularProgress, Alert } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import { authAPI } from '../services/api';
 const OAuthCallbackPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginWithOAuth } = useAuth();
   const [isProcessing, setIsProcessing] = useState(true);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -84,9 +85,10 @@ const OAuthCallbackPage: React.FC = () => {
         setIsSuccess(true);
         setIsProcessing(false);
         
-        // Redirect to dashboard after a brief delay to show success message
+        // Redirect to intended destination or dashboard after a brief delay to show success message
         setTimeout(() => {
-          navigate('/dashboard', { replace: true });
+          const from = (location.state as any)?.from?.pathname || '/dashboard';
+          navigate(from, { replace: true });
         }, 2000);
       } catch (error: any) {
         logger.error('OAuth callback error:', error);
@@ -130,9 +132,10 @@ const OAuthCallbackPage: React.FC = () => {
       setIsSuccess(true);
       setShowRoleSelection(false);
       
-      // Redirect to dashboard after a brief delay to show success message
+      // Redirect to intended destination or dashboard after a brief delay to show success message
       setTimeout(() => {
-        navigate('/dashboard', { replace: true });
+        const from = (location.state as any)?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
       }, 2000);
     } catch (error: any) {
       logger.error('Role selection error:', error);

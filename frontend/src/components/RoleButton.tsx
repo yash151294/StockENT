@@ -16,6 +16,7 @@ import {
   Store,
   ArrowDropDown,
 } from '@mui/icons-material';
+import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
 
@@ -90,28 +91,34 @@ const RoleButton: React.FC<RoleButtonProps> = ({
 
   return (
     <>
-      <Button
-        variant={variant}
-        size={size}
-        onClick={handleClick}
-        disabled={isChanging}
-        startIcon={isChanging ? <CircularProgress size={16} /> : getRoleIcon()}
-        endIcon={!isChanging ? <ArrowDropDown /> : undefined}
-        sx={{
-          minWidth: 'auto',
-          textTransform: 'none',
-          fontWeight: 500,
-          ...sx,
-        }}
+      <motion.div
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ duration: 0.2 }}
       >
-        {showLabel && (
-          <Box display="flex" alignItems="center" gap={0.5}>
-            <Typography variant="body2" component="span">
-              {getRoleLabel()}
-            </Typography>
-          </Box>
-        )}
-      </Button>
+        <Button
+          variant={variant}
+          size={size}
+          onClick={handleClick}
+          disabled={isChanging}
+          startIcon={isChanging ? <CircularProgress size={16} /> : getRoleIcon()}
+          endIcon={!isChanging ? <ArrowDropDown /> : undefined}
+          sx={{
+            minWidth: 'auto',
+            textTransform: 'none',
+            fontWeight: 500,
+            ...sx,
+          }}
+        >
+          {showLabel && (
+            <Box display="flex" alignItems="center" gap={0.5}>
+              <Typography variant="body2" component="span">
+                {getRoleLabel()}
+              </Typography>
+            </Box>
+          )}
+        </Button>
+      </motion.div>
 
       <Menu
         anchorEl={anchorEl}

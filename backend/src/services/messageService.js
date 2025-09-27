@@ -19,8 +19,74 @@ const createConversation = async (productId, buyerId, sellerId) => {
     });
 
     if (existingConversation) {
-      return existingConversation;
+      // Return existing conversation with full details
+      const fullConversation = await prisma.conversation.findUnique({
+        where: { id: existingConversation.id },
+        include: {
+          product: {
+            include: {
+              seller: {
+                select: {
+                  id: true,
+                  companyName: true,
+                  country: true,
+                },
+              },
+              category: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              images: {
+                where: { isPrimary: true },
+                select: {
+                  id: true,
+                  imageUrl: true,
+                  alt: true,
+                },
+              },
+            },
+          },
+          buyer: {
+            select: {
+              id: true,
+              companyName: true,
+              country: true,
+            },
+          },
+          seller: {
+            select: {
+              id: true,
+              companyName: true,
+              country: true,
+            },
+          },
+          _count: {
+            select: {
+              messages: true,
+            },
+          },
+        },
+      });
+      return fullConversation;
     }
+
+    // Get buyer and seller information for aliases
+    const [buyer, seller] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: buyerId },
+        select: { companyName: true, contactPerson: true }
+      }),
+      prisma.user.findUnique({
+        where: { id: sellerId },
+        select: { companyName: true, contactPerson: true }
+      })
+    ]);
+
+    // Ensure we have valid aliases
+    const buyerAlias = buyer?.companyName || buyer?.contactPerson || 'Buyer';
+    const sellerAlias = seller?.companyName || seller?.contactPerson || 'Seller';
 
     // Create new conversation
     const conversation = await prisma.conversation.create({
@@ -28,7 +94,55 @@ const createConversation = async (productId, buyerId, sellerId) => {
         productId,
         buyerId,
         sellerId,
+        buyerAlias,
+        sellerAlias,
         status: 'ACTIVE',
+      },
+      include: {
+        product: {
+          include: {
+            seller: {
+              select: {
+                id: true,
+                companyName: true,
+                country: true,
+              },
+            },
+            category: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            images: {
+              where: { isPrimary: true },
+              select: {
+                id: true,
+                imageUrl: true,
+                alt: true,
+              },
+            },
+          },
+        },
+        buyer: {
+          select: {
+            id: true,
+            companyName: true,
+            country: true,
+          },
+        },
+        seller: {
+          select: {
+            id: true,
+            companyName: true,
+            country: true,
+          },
+        },
+        _count: {
+          select: {
+            messages: true,
+          },
+        },
       },
     });
 
@@ -49,7 +163,8 @@ const sendMessage = async (
   conversationId,
   senderId,
   content,
-  messageType = 'TEXT'
+  messageType = 'TEXT',
+  encryptionData = null
 ) => {
   try {
     // Verify conversation exists and user is part of it
@@ -73,15 +188,31 @@ const sendMessage = async (
       throw new Error('Conversation not found or access denied');
     }
 
+    // Determine receiver ID
+    const receiverId = conversation.buyerId === senderId ? conversation.sellerId : conversation.buyerId;
+
+    // Prepare message data
+    const messageData = {
+      conversationId,
+      senderId,
+      receiverId,
+      content,
+      messageType,
+    };
+
+    // Add encryption fields if provided
+    if (encryptionData) {
+      messageData.isEncrypted = true;
+      messageData.encryptedContent = encryptionData.encryptedContent;
+      messageData.encryptionKeyId = encryptionData.keyId;
+      messageData.iv = encryptionData.iv;
+      messageData.tag = encryptionData.tag;
+      messageData.keyExchangeId = encryptionData.keyExchangeId;
+    }
+
     // Create message
     const message = await prisma.message.create({
-      data: {
-        conversationId,
-        senderId,
-        content,
-        messageType,
-        status: 'SENT',
-      },
+      data: messageData,
     });
 
     // Update conversation last message time
@@ -625,6 +756,159 @@ const deleteConversation = async (conversationId, userId) => {
   }
 };
 
+/**
+ * Delete individual message
+ */
+const deleteMessage = async (messageId, userId) => {
+  try {
+    // Verify message exists and user is the sender or receiver
+    const message = await prisma.message.findFirst({
+      where: {
+        id: messageId,
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      include: {
+        conversation: true,
+      },
+    });
+
+    if (!message) {
+      throw new Error('Message not found or access denied');
+    }
+
+    // Delete the message
+    await prisma.message.delete({
+      where: { id: messageId },
+    });
+
+    logger.info(`Message deleted: ${messageId} by user: ${userId}`);
+    return message;
+  } catch (error) {
+    logger.error('Delete message error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Create key exchange request
+ */
+const createKeyExchange = async (
+  conversationId,
+  fromUserId,
+  toUserId,
+  encryptedAESKey,
+  keyId,
+  publicKey
+) => {
+  try {
+    const keyExchange = await prisma.keyExchange.create({
+      data: {
+        conversationId,
+        fromUserId,
+        toUserId,
+        encryptedAESKey,
+        keyId,
+        publicKey,
+        status: 'PENDING',
+      },
+    });
+
+    logger.info(`Key exchange created: ${keyExchange.id} for conversation: ${conversationId}`);
+    return keyExchange;
+  } catch (error) {
+    logger.error('Create key exchange error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Process key exchange
+ */
+const processKeyExchange = async (keyExchangeId, status = 'PROCESSED') => {
+  try {
+    const keyExchange = await prisma.keyExchange.update({
+      where: { id: keyExchangeId },
+      data: {
+        status,
+        processedAt: new Date(),
+      },
+    });
+
+    logger.info(`Key exchange processed: ${keyExchangeId} with status: ${status}`);
+    return keyExchange;
+  } catch (error) {
+    logger.error('Process key exchange error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get pending key exchanges for user
+ */
+const getPendingKeyExchanges = async (userId) => {
+  try {
+    const keyExchanges = await prisma.keyExchange.findMany({
+      where: {
+        toUserId: userId,
+        status: 'PENDING',
+      },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            companyName: true,
+            email: true,
+          },
+        },
+        conversation: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return keyExchanges;
+  } catch (error) {
+    logger.error('Get pending key exchanges error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get conversation encryption status
+ */
+const getConversationEncryptionStatus = async (conversationId) => {
+  try {
+    const keyExchange = await prisma.keyExchange.findFirst({
+      where: {
+        conversationId,
+        status: 'PROCESSED',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return {
+      isEncrypted: !!keyExchange,
+      keyId: keyExchange?.keyId,
+      lastExchange: keyExchange?.createdAt,
+    };
+  } catch (error) {
+    logger.error('Get conversation encryption status error:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   createConversation,
   sendMessage,
@@ -636,4 +920,9 @@ module.exports = {
   getUnreadMessageCount,
   searchConversations,
   deleteConversation,
+  deleteMessage,
+  createKeyExchange,
+  processKeyExchange,
+  getPendingKeyExchanges,
+  getConversationEncryptionStatus,
 };

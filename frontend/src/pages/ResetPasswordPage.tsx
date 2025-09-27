@@ -20,6 +20,7 @@ import * as yup from 'yup';
 import { authAPI } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import Logo from '../components/Logo';
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -167,9 +168,12 @@ const ResetPasswordPage: React.FC = () => {
       <Container maxWidth="sm">
         <Paper elevation={24} sx={{ p: 4, borderRadius: 2 }}>
           <Box textAlign="center" mb={4}>
-            <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 700 }}>
-              StockENT
-            </Typography>
+            <Logo 
+              size={60}
+              color="#1976d2"
+              variant="full"
+              clickable={true}
+            />
             <Typography variant="h5" component="h2" gutterBottom>
               Reset Your Password
             </Typography>

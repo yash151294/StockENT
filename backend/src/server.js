@@ -21,6 +21,7 @@ const messageRoutes = require('./routes/messages');
 const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const searchRoutes = require('./routes/search');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -72,6 +73,7 @@ app.use(
         imgSrc: ["'self'", 'data:', 'https:'],
       },
     },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
@@ -92,7 +94,7 @@ const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max:
     parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) ||
-    (process.env.NODE_ENV === 'development' ? 1000 : 100), // Higher limit for development
+    (process.env.NODE_ENV === 'development' ? 5000 : 100), // Much higher limit for development
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(
@@ -141,6 +143,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/auctions', auctionRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/search', searchRoutes);
@@ -248,6 +251,15 @@ const initializeServer = async () => {
     logger.warn(
       '   To enable caching, ensure Redis is running on localhost:6379'
     );
+  }
+
+  // Start cron jobs for auction processing
+  try {
+    const { startAllCronJobs } = require('./cron');
+    startAllCronJobs();
+    logger.info('✅ Cron jobs started successfully');
+  } catch (error) {
+    logger.error('❌ Failed to start cron jobs:', error);
   }
 
   server.listen(PORT, () => {

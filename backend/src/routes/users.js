@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticateToken } = require('../middleware/auth');
 const { apiLimiter } = require('../middleware/rateLimiter');
+const { uploadAvatar, handleUploadError } = require('../middleware/upload');
 const { logger } = require('../utils/logger');
 
 const router = express.Router();
@@ -22,7 +23,7 @@ router.get('/profile', [authenticateToken, apiLimiter], async (req, res) => {
           select: {
             products: true,
             conversations: true,
-            watchlistItems: true,
+            watchlist: true,
             bids: true,
           },
         },
@@ -61,40 +62,22 @@ router.put('/profile', [authenticateToken, apiLimiter], async (req, res) => {
       contactPerson,
       phone,
       country,
-      businessLicense,
-      taxId,
-      address,
     } = req.body;
 
     const updateData = {};
-    if (companyName) updateData.companyName = companyName;
-    if (contactPerson) updateData.contactPerson = contactPerson;
-    if (phone) updateData.phone = phone;
-    if (country) updateData.country = country;
+    if (companyName !== undefined) updateData.companyName = companyName;
+    if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
+    if (phone !== undefined) updateData.phone = phone;
+    if (country !== undefined) updateData.country = country;
 
     // Update user
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: updateData,
+      include: {
+        companyProfile: true,
+      },
     });
-
-    // Update or create company profile
-    if (businessLicense || taxId || address) {
-      await prisma.companyProfile.upsert({
-        where: { userId: req.user.id },
-        update: {
-          businessLicense,
-          taxId,
-          address,
-        },
-        create: {
-          userId: req.user.id,
-          businessLicense,
-          taxId,
-          address,
-        },
-      });
-    }
 
     logger.info(`User profile updated: ${req.user.id}`);
 
@@ -104,6 +87,162 @@ router.put('/profile', [authenticateToken, apiLimiter], async (req, res) => {
     });
   } catch (error) {
     logger.error('Update user profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/users/company-profile
+ * @desc    Update user company profile
+ * @access  Private
+ */
+router.put('/company-profile', [authenticateToken, apiLimiter], async (req, res) => {
+  try {
+    const {
+      businessLicense,
+      taxId,
+      address,
+      city,
+      state,
+      postalCode,
+      website,
+      description,
+      certifications,
+    } = req.body;
+
+    const updateData = {};
+    if (businessLicense !== undefined) updateData.businessLicense = businessLicense;
+    if (taxId !== undefined) updateData.taxId = taxId;
+    if (address !== undefined) updateData.address = address;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (postalCode !== undefined) updateData.postalCode = postalCode;
+    if (website !== undefined) updateData.website = website;
+    if (description !== undefined) updateData.description = description;
+    if (certifications !== undefined) updateData.certifications = certifications;
+
+    // Update or create company profile
+    const companyProfile = await prisma.companyProfile.upsert({
+      where: { userId: req.user.id },
+      update: updateData,
+      create: {
+        userId: req.user.id,
+        ...updateData,
+      },
+    });
+
+    logger.info(`Company profile updated: ${req.user.id}`);
+
+    res.json({
+      success: true,
+      data: companyProfile,
+    });
+  } catch (error) {
+    logger.error('Update company profile error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * @route   POST /api/users/avatar
+ * @desc    Upload user avatar
+ * @access  Private
+ */
+router.post('/avatar', [authenticateToken, apiLimiter, uploadAvatar, handleUploadError], async (req, res) => {
+  try {
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+      });
+    }
+
+    const { filename } = req.file;
+    const profileImageUrl = `/uploads/users/${filename}`;
+
+    // Update user profile image
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { profileImageUrl },
+      include: {
+        companyProfile: true,
+      },
+    });
+
+    logger.info(`Avatar uploaded for user: ${req.user.id}`);
+
+    res.json({
+      success: true,
+      data: user,
+      message: 'Avatar uploaded successfully',
+    });
+  } catch (error) {
+    logger.error('Upload avatar error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/users/change-password
+ * @desc    Change user password
+ * @access  Private
+ */
+router.put('/change-password', [authenticateToken, apiLimiter], async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // Get user with password hash
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { passwordHash: true },
+    });
+
+    if (!user || !user.passwordHash) {
+      return res.status(400).json({
+        success: false,
+        error: 'User not found or no password set',
+      });
+    }
+
+    // Verify current password
+    const bcrypt = require('bcryptjs');
+    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        error: 'Current password is incorrect',
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 12;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { passwordHash: newPasswordHash },
+    });
+
+    logger.info(`Password changed for user: ${req.user.id}`);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    logger.error('Change password error:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -422,7 +561,7 @@ router.get('/:id/stats', [apiLimiter], async (req, res) => {
           sellerId: req.params.id,
           status: 'COMPLETED',
         },
-        _sum: { price: true },
+        _sum: { basePrice: true },
       }),
       prisma.review.aggregate({
         where: { sellerId: req.params.id },

@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   AppBar,
   Toolbar,
-  Typography,
   Button,
   IconButton,
   Drawer,
@@ -11,7 +10,6 @@ import {
   ListItemIcon,
   ListItemText,
   Box,
-  Container,
   Avatar,
   Menu,
   MenuItem,
@@ -21,26 +19,23 @@ import {
 } from '@mui/material';
 import {
   Menu as MenuIcon,
-  Home,
-  Dashboard,
-  Inventory,
-  Gavel,
-  Message,
   Person,
   Settings,
   Notifications,
   Language,
   Logout,
-  ShoppingCart,
   Search,
-  ChevronLeft,
-  ChevronRight,
+  Close,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
+import { getImageUrl } from '../utils/imageUtils';
+import { useConversations } from '../hooks/useConversations';
 import RoleChip from './RoleChip';
+import Logo from './Logo';
+import Footer from './Footer';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -52,58 +47,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { state, logout } = useAuth();
   const { t, currentLanguage, setLanguage, availableLanguages } = useLanguage();
   const { showSuccess } = useNotification();
+  const { hasConversations } = useConversations();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [desktopDrawerOpen, setDesktopDrawerOpen] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageMenuAnchor, setLanguageMenuAnchor] = useState<null | HTMLElement>(null);
 
-  // Add robust event handling to prevent unwanted sidebar toggles
-  useEffect(() => {
-    const handleGlobalClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      
-      // Only allow sidebar toggle from the designated toggle button
-      const isToggleButton = target.closest('[data-sidebar-toggle="true"]');
-      
-      // If it's not the toggle button, prevent any sidebar state changes
-      if (!isToggleButton) {
-        // Check if this click might trigger unwanted sidebar behavior
-        const isTabClick = target.closest('.MuiTabs-root') || 
-                          target.closest('.MuiTab-root') || 
-                          target.closest('[role="tab"]') ||
-                          target.classList.contains('MuiTab-root');
-        
-        if (isTabClick) {
-          // Prevent any event propagation that might affect sidebar
-          event.stopImmediatePropagation();
-        }
-      }
-    };
-
-    // Use capture phase to intercept events before they reach other handlers
-    document.addEventListener('click', handleGlobalClick, true);
-    return () => document.removeEventListener('click', handleGlobalClick, true);
-  }, []);
-
-  const handleDrawerToggle = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    event.nativeEvent.stopImmediatePropagation();
-    setDrawerOpen(!drawerOpen);
+  const handleMobileMenuToggle = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
   };
 
-  const handleDrawerClose = (event: {}, reason: "backdropClick" | "escapeKeyDown") => {
-    setDrawerOpen(false);
-  };
-
-  const handleDesktopDrawerToggle = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    event.nativeEvent.stopImmediatePropagation();
-    setDesktopDrawerOpen(!desktopDrawerOpen);
+  const handleMobileMenuClose = () => {
+    setMobileMenuOpen(false);
   };
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -127,6 +84,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setLanguageMenuAnchor(null);
   };
 
+
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -134,88 +93,39 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       navigate('/');
       handleProfileMenuClose();
     } catch (error) {
-      // Handle logout error if needed
       console.error('Logout error:', error);
     }
   };
 
   const navigationItems = [
-    { label: t('navigation.home'), icon: <Home />, path: '/', auth: false },
-    { label: t('navigation.dashboard'), icon: <Dashboard />, path: '/dashboard', auth: true },
-    { label: t('navigation.products'), icon: <Inventory />, path: '/products' },
-    { label: t('navigation.auctions'), icon: <Gavel />, path: '/auctions' },
-    { label: t('navigation.messages'), icon: <Message />, path: '/messages', auth: true },
-    { label: t('navigation.profile'), icon: <Person />, path: '/profile', auth: true },
+    { label: t('navigation.home'), path: '/', auth: false },
+    { label: t('navigation.dashboard'), path: '/dashboard', auth: true },
+    { label: t('navigation.products'), path: '/products' },
+    { label: t('navigation.auctions'), path: '/auctions' },
+    { label: t('navigation.messages'), path: '/messages', auth: true, requiresConversations: true },
+    { label: t('navigation.watchlist'), path: '/watchlist', auth: true },
+    { label: t('navigation.profile'), path: '/profile', auth: true },
   ];
 
   if (state.user?.role === 'ADMIN') {
     navigationItems.push({
       label: t('navigation.admin'),
-      icon: <Settings />,
       path: '/admin',
       auth: true,
     });
   }
 
-  const drawer = (
-    <Box sx={{ width: desktopDrawerOpen ? 250 : 56, transition: 'width 0.3s ease' }}>
-      <Toolbar>
-        {desktopDrawerOpen && (
-          <Typography variant="h6" noWrap component="div">
-            StockENT
-          </Typography>
-        )}
-        {!isMobile && (
-          <IconButton
-            onClick={handleDesktopDrawerToggle}
-            sx={{ ml: 'auto' }}
-            aria-label="toggle sidebar"
-          >
-            {desktopDrawerOpen ? <ChevronLeft /> : <ChevronRight />}
-          </IconButton>
-        )}
-      </Toolbar>
-      <List>
-        {navigationItems.map((item) => {
-          // Show item if:
-          // - No auth requirement (undefined)
-          // - auth: true and user is authenticated
-          // - auth: false and user is NOT authenticated
-          if (item.auth === true && !state.isAuthenticated) return null;
-          if (item.auth === false && state.isAuthenticated) return null;
-          
-          return (
-            <ListItem
-              button
-              key={item.path}
-              onClick={() => {
-                navigate(item.path);
-                // Only close mobile drawer, don't affect desktop drawer state
-                if (isMobile) {
-                  setDrawerOpen(false);
-                }
-              }}
-              selected={location.pathname === item.path}
-              sx={{
-                justifyContent: desktopDrawerOpen ? 'initial' : 'center',
-                px: desktopDrawerOpen ? 3 : 2,
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: desktopDrawerOpen ? 56 : 'auto' }}>
-                {item.icon}
-              </ListItemIcon>
-              {desktopDrawerOpen && <ListItemText primary={item.label} />}
-            </ListItem>
-          );
-        })}
-      </List>
-    </Box>
-  );
+
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ 
+      display: 'flex', 
+      flexDirection: 'column',
+      minHeight: '100vh', // Ensure full viewport height
+    }}>
       <AppBar 
         position="fixed" 
+        elevation={0}
         sx={{ 
           zIndex: theme.zIndex.drawer + 1,
           backgroundColor: state.isAuthenticated 
@@ -224,51 +134,97 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               : 'primary.main'
             : 'primary.main',
           transition: 'background-color 0.3s ease',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
         }}
       >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="toggle sidebar"
-            edge="start"
-            onClick={isMobile ? handleDrawerToggle : handleDesktopDrawerToggle}
-            sx={{ mr: 2 }}
-            data-sidebar-toggle="true"
-          >
-            <MenuIcon />
-          </IconButton>
-          
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            StockENT
-          </Typography>
+        <Toolbar sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          width: '100%',
+          minHeight: 64,
+        }}>
+          {/* Left side - Logo and Navigation */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Logo 
+              size={32}
+              color="white"
+              textColor="#FFFFFF"
+              variant="full"
+              clickable={true}
+            />
+            
+            {/* Desktop Navigation Menu */}
+            {!isMobile && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                {navigationItems.map((item) => {
+                  // Show item if:
+                  // - No auth requirement (undefined)
+                  // - auth: true and user is authenticated
+                  // - auth: false and user is NOT authenticated
+                  if (item.auth === true && !state.isAuthenticated) return null;
+                  if (item.auth === false && state.isAuthenticated) return null;
+                  
+                  // For messages tab, only show if user has conversations
+                  if (item.requiresConversations && !hasConversations) return null;
+                  
+                  return (
+                    <Button
+                      key={item.path}
+                      color="inherit"
+                      onClick={() => navigate(item.path)}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: location.pathname === item.path ? 600 : 500,
+                        px: 2,
+                        py: 1,
+                        backgroundColor: location.pathname === item.path ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        }
+                      }}
+                    >
+                      {item.label}
+                    </Button>
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {/* Right side - Actions and User Menu */}
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1,
+          }}>
             {/* Search Button */}
-            <IconButton color="inherit" onClick={() => navigate('/products')}>
+            <IconButton color="inherit" onClick={() => navigate('/products')} sx={{ mr: 1 }}>
               <Search />
             </IconButton>
 
             {/* Role Chip */}
             {state.isAuthenticated && (
-              <RoleChip 
-                onRoleChange={() => {
-                  // Redirect to dashboard to show updated UI
-                  navigate('/dashboard');
-                }}
-                sx={{ 
-                  mr: 1,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  color: 'white',
-                  '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                  }
-                }}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
+                <RoleChip 
+                  onRoleChange={() => {
+                    navigate('/dashboard');
+                  }}
+                  sx={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    color: 'white',
+                    height: 32,
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                    }
+                  }}
+                />
+              </Box>
             )}
 
             {/* Notifications */}
             {state.isAuthenticated && (
-              <IconButton color="inherit">
+              <IconButton color="inherit" sx={{ mr: 1 }}>
                 <Badge badgeContent={0} color="error">
                   <Notifications />
                 </Badge>
@@ -276,9 +232,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             )}
 
             {/* Language Selector */}
-            <IconButton color="inherit" onClick={handleLanguageMenuOpen}>
+            <IconButton color="inherit" onClick={handleLanguageMenuOpen} sx={{ mr: 1 }}>
               <Language />
             </IconButton>
+
+            {/* Mobile Menu Button */}
+            {isMobile && (
+              <IconButton
+                color="inherit"
+                aria-label="open mobile menu"
+                onClick={handleMobileMenuToggle}
+                sx={{ ml: 1 }}
+              >
+                <MenuIcon />
+              </IconButton>
+            )}
 
             {/* User Menu */}
             {state.isAuthenticated ? (
@@ -294,10 +262,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   <Avatar 
                     sx={{ width: 32, height: 32 }}
-                    src={state.user?.profileImageUrl}
+                    src={getImageUrl(state.user?.profileImageUrl, 'avatar')}
                     alt={state.user?.contactPerson || state.user?.companyName || state.user?.email}
-                    onLoad={() => console.log('Layout Avatar image loaded successfully')}
-                    onError={(e) => console.log('Layout Avatar image failed to load:', e, 'URL:', state.user?.profileImageUrl)}
                   >
                     {!state.user?.profileImageUrl && state.user?.email?.charAt(0).toUpperCase()}
                   </Avatar>
@@ -351,6 +317,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Toolbar>
       </AppBar>
 
+
+
       {/* Language Menu */}
       <Menu
         anchorEl={languageMenuAnchor}
@@ -371,27 +339,71 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         ))}
       </Menu>
 
-      {/* Drawer */}
+      {/* Mobile Menu Drawer */}
       <Drawer
-        variant={isMobile ? 'temporary' : 'persistent'}
-        open={isMobile ? drawerOpen : desktopDrawerOpen}
-        onClose={isMobile ? handleDrawerClose : undefined}
-        ModalProps={{
-          keepMounted: true, // Better open performance on mobile.
-        }}
+        anchor="right"
+        open={mobileMenuOpen}
+        onClose={handleMobileMenuClose}
         sx={{
-          display: { xs: 'block', md: 'block' },
-          '& .MuiDrawer-paper': { 
-            boxSizing: 'border-box', 
-            width: isMobile ? 250 : (desktopDrawerOpen ? 250 : 56),
-            transition: theme.transitions.create('width', {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
-            }),
+          '& .MuiDrawer-paper': {
+            width: 280,
+            backgroundColor: 'rgba(17, 17, 17, 0.95)',
+            backdropFilter: 'blur(20px)',
+            borderLeft: '1px solid rgba(99, 102, 241, 0.2)',
           },
         }}
       >
-        {drawer}
+        <Box sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Logo 
+              size={28}
+              color="#6366F1"
+              textColor="#FFFFFF"
+              variant="full"
+              clickable={true}
+            />
+            <IconButton onClick={handleMobileMenuClose} sx={{ color: '#6366F1' }}>
+              <Close />
+            </IconButton>
+          </Box>
+          
+          <List>
+            {navigationItems.map((item) => {
+              if (item.auth === true && !state.isAuthenticated) return null;
+              if (item.auth === false && state.isAuthenticated) return null;
+              
+              // For messages tab, only show if user has conversations
+              if (item.requiresConversations && !hasConversations) return null;
+              
+              return (
+                <ListItem
+                  key={item.path}
+                  button
+                  onClick={() => {
+                    navigate(item.path);
+                    handleMobileMenuClose();
+                  }}
+                  selected={location.pathname === item.path}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 1,
+                    '&.Mui-selected': {
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    }
+                  }}
+                >
+                  <ListItemText 
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      fontWeight: location.pathname === item.path ? 600 : 500,
+                      color: location.pathname === item.path ? '#6366F1' : 'inherit',
+                    }}
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        </Box>
       </Drawer>
 
       {/* Main Content */}
@@ -399,34 +411,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
-          width: { 
-            xs: '100%', 
-            md: desktopDrawerOpen ? `calc(100% - 250px)` : `calc(100% - 56px)`
-          },
-          marginLeft: { 
-            xs: 0, 
-            md: desktopDrawerOpen ? '250px' : '56px' 
-          },
-          minWidth: 0, // Prevents content from overflowing
           mt: '64px',
-          transition: theme.transitions.create(['margin', 'width', 'marginLeft'], {
-            easing: theme.transitions.easing.sharp,
-            duration: theme.transitions.duration.leavingScreen,
-          }),
+          minHeight: 'calc(100vh - 64px)',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        <Container 
-          maxWidth="xl" 
-          sx={{ 
-            width: '100%',
-            maxWidth: 'none', // Allow container to use full available width
-            px: 0, // Remove horizontal padding to use full width
-          }}
-        >
+        <Box sx={{ flex: 1, pb: 4 }}>
           {children}
-        </Container>
+        </Box>
       </Box>
+
+      {/* Footer */}
+      <Footer />
     </Box>
   );
 };

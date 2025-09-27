@@ -7,6 +7,7 @@ const userRoutes = require('./users');
 const auctionRoutes = require('./auctions');
 const messageRoutes = require('./messages');
 const adminRoutes = require('./admin');
+const dashboardRoutes = require('./dashboard');
 
 const router = express.Router();
 
@@ -28,6 +29,7 @@ router.use('/search', searchRoutes);
 router.use('/users', userRoutes);
 router.use('/auctions', auctionRoutes);
 router.use('/messages', messageRoutes);
+router.use('/dashboard', dashboardRoutes);
 router.use('/admin', adminRoutes);
 
 module.exports = router;

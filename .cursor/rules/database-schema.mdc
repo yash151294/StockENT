@@ -1,0 +1,66 @@
+---
+description: Database schema and Prisma ORM guidelines
+---
+
+# Database Schema & Prisma Guidelines
+
+## Core Models
+The database follows a comprehensive B2B marketplace schema with these key entities:
+
+### User Management
+- **User**: Core user accounts with role-based access (ADMIN/SELLER/BUYER)
+- **CompanyProfile**: Business information for verified users
+- **VerificationToken**: Email verification and password reset tokens
+- **RefreshToken**: JWT refresh token management
+
+### Product System
+- **Product**: Stock listings with specifications and images
+- **ProductImage**: Multiple images per product with ordering
+- **ProductSpecification**: Detailed product attributes
+- **Category**: Hierarchical product categorization
+- **WatchlistItem**: User product favorites
+
+### Auction System
+- **Auction**: Live auction details with timing and pricing
+- **Bid**: Individual bids with automatic bidding support
+- **AuctionStatus**: Real-time auction state management
+
+### Communication
+- **Conversation**: User-to-user messaging threads
+- **Message**: Individual messages with attachments
+- **SampleRequest**: Product sample requests between users
+
+### Notifications
+- **Notification**: System notifications for users
+- **NotificationType**: Various notification categories
+
+## Schema Guidelines
+- Use **cuid()** for all primary keys
+- Implement **soft deletes** where appropriate
+- Use **enums** for status fields and fixed values
+- Follow **naming conventions**: camelCase for fields, PascalCase for models
+- Use **proper relationships** with foreign keys and cascade deletes
+- Implement **unique constraints** where needed
+- Use **JSON fields** for flexible data storage
+
+## Key Relationships
+- **User → Products**: One-to-many (seller relationship)
+- **Product → Auction**: One-to-one (auction products)
+- **Auction → Bids**: One-to-many (bid history)
+- **User → Conversations**: Many-to-many (buyer/seller)
+- **Conversation → Messages**: One-to-many (message thread)
+
+## Database Operations
+- Use **Prisma Client** for all database interactions
+- Implement **transactions** for multi-table operations
+- Use **include/select** for optimized queries
+- Implement **pagination** for large datasets
+- Use **raw queries** only when necessary
+- Follow **migration best practices** for schema changes
+
+## Performance Considerations
+- Add **database indexes** for frequently queried fields
+- Use **connection pooling** for better performance
+- Implement **query optimization** with proper includes
+- Use **Redis caching** for frequently accessed data
+- Monitor **query performance** with Prisma logging

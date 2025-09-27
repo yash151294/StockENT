@@ -243,6 +243,7 @@ router.get('/:id/products', [apiLimiter], async (req, res) => {
       search,
       minPrice,
       maxPrice,
+      currency,
       listingType,
       country,
       sortBy = 'createdAt',
@@ -268,6 +269,10 @@ router.get('/:id/products', [apiLimiter], async (req, res) => {
       where.price = {};
       if (minPrice) where.price.gte = parseFloat(minPrice);
       if (maxPrice) where.price.lte = parseFloat(maxPrice);
+    }
+
+    if (currency) {
+      where.currency = currency;
     }
 
     if (listingType) {

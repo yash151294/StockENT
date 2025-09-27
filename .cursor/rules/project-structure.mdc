@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+---
+
+# StockENT Project Structure Guide
+
+## Overview
+StockENT is a B2B textile marketplace with real-time auctions, built with React/Next.js frontend and Node.js/Express backend.
+
+## Project Architecture
+- **Frontend**: React 18 + TypeScript + Next.js 15 + Material-UI + Tailwind CSS
+- **Backend**: Node.js + Express + Prisma ORM + PostgreSQL + Redis + Socket.io
+- **Database**: PostgreSQL with Prisma schema
+- **Real-time**: Socket.io for live auctions and messaging
+- **Authentication**: JWT + Google OAuth + Role-based access (ADMIN/SELLER/BUYER)
+
+## Key Entry Points
+- **Backend**: [backend/src/server.js](mdc:backend/src/server.js) - Main server with Express, Socket.io, Redis
+- **Frontend**: [frontend/src/App.tsx](mdc:frontend/src/App.tsx) - React app with routing and context providers
+- **Database**: [backend/prisma/schema.prisma](mdc:backend/prisma/schema.prisma) - Prisma schema with all models
+
+## Directory Structure
+```
+StockENT/
+├── backend/                 # Node.js API server
+│   ├── src/
+│   │   ├── controllers/     # Route handlers
+│   │   ├── middleware/      # Express middleware
+│   │   ├── routes/          # API route definitions
+│   │   ├── services/        # Business logic
+│   │   ├── utils/           # Utilities (logger, cache, etc.)
+│   │   └── validators/      # Input validation
+│   ├── prisma/              # Database schema & migrations
+│   └── uploads/             # File storage
+├── frontend/                # React/Next.js app
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   ├── pages/           # Page components
+│   │   ├── contexts/        # React contexts (Auth, Socket, etc.)
+│   │   ├── services/        # API services
+│   │   ├── types/           # TypeScript definitions
+│   │   └── utils/           # Frontend utilities
+│   └── app/                 # Next.js app directory
+└── uploads/                 # Shared file uploads
+```
+
+## Key Features
+- **Real-time Auctions**: Live bidding with Socket.io
+- **Messaging System**: User-to-user communication
+- **Role-based Access**: Admin, Seller, Buyer permissions
+- **File Uploads**: Secure image handling with Sharp
+- **Email System**: Automated notifications
+- **Cron Jobs**: Automated cleanup and daily tasks
+- **Caching**: Redis for performance optimization

@@ -1,0 +1,138 @@
+---
+globs: frontend/src/components/**/*.tsx
+alwaysApply: false
+---
+# UI Components & Design System
+
+## Component Architecture
+StockENT uses a hybrid approach combining Material-UI and Tailwind CSS for a modern, consistent design system.
+
+### Component Structure
+- **Base Components**: [frontend/src/components/ui/](mdc:frontend/src/components/ui/) - Reusable UI primitives
+- **Feature Components**: [frontend/src/components/](mdc:frontend/src/components/) - Business logic components
+- **Page Components**: [frontend/src/pages/](mdc:frontend/src/pages/) - Full page components
+
+## Design System
+
+### Material-UI Theme
+- **Primary Color**: #1976d2 (Blue)
+- **Secondary Color**: #dc004e (Red)
+- **Typography**: Roboto font family
+- **Spacing**: 8px base unit
+- **Border Radius**: 8px standard
+- **Shadows**: Material Design elevation
+
+### Tailwind CSS Integration
+- **Utility Classes**: For custom styling and spacing
+- **Responsive Design**: Mobile-first approach
+- **Dark Mode**: System preference detection
+- **Custom Colors**: Brand color palette
+- **Animations**: Smooth transitions and micro-interactions
+
+## Component Guidelines
+
+### Base UI Components
+- **Button**: [frontend/src/components/ui/button.tsx](mdc:frontend/src/components/ui/button.tsx) - Consistent button styling
+- **Input**: [frontend/src/components/ui/input.tsx](mdc:frontend/src/components/ui/input.tsx) - Form input components
+- **Card**: [frontend/src/components/ui/card.tsx](mdc:frontend/src/components/ui/card.tsx) - Content containers
+- **Badge**: [frontend/src/components/ui/badge.tsx](mdc:frontend/src/components/ui/badge.tsx) - Status indicators
+
+### Business Components
+- **Layout**: [frontend/src/components/Layout.tsx](mdc:frontend/src/components/Layout.tsx) - Main app layout
+- **ProtectedRoute**: [frontend/src/components/ProtectedRoute.tsx](mdc:frontend/src/components/ProtectedRoute.tsx) - Route protection
+- **LoadingSpinner**: [frontend/src/components/LoadingSpinner.tsx](mdc:frontend/src/components/LoadingSpinner.tsx) - Loading states
+- **RoleButton**: [frontend/src/components/RoleButton.tsx](mdc:frontend/src/components/RoleButton.tsx) - Role-based buttons
+
+## Styling Guidelines
+
+### CSS-in-JS with Material-UI
+- Use **theme object** for consistent styling
+- Implement **responsive breakpoints** (xs, sm, md, lg, xl)
+- Use **sx prop** for component-specific styles
+- Follow **Material Design principles**
+
+### Tailwind CSS Usage
+- Use **utility classes** for spacing and layout
+- Implement **responsive prefixes** (sm:, md:, lg:)
+- Use **custom CSS** for complex animations
+- Follow **mobile-first** responsive design
+
+### Component Styling Patterns
+```tsx
+// Material-UI with theme
+<Button 
+  variant="contained" 
+  color="primary"
+  sx={{ 
+    borderRadius: 2,
+    textTransform: 'none',
+    fontWeight: 500 
+  }}
+>
+
+// Tailwind utility classes
+<div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
+```
+
+## Responsive Design
+
+### Breakpoint Strategy
+- **Mobile**: 0-768px (xs, sm)
+- **Tablet**: 768-1024px (md)
+- **Desktop**: 1024px+ (lg, xl)
+- **Large Desktop**: 1440px+ (xl)
+
+### Component Responsiveness
+- **Grid Layouts**: Responsive grid systems
+- **Navigation**: Mobile-first navigation patterns
+- **Forms**: Stacked on mobile, inline on desktop
+- **Tables**: Horizontal scroll on mobile
+- **Images**: Responsive image sizing
+
+## Accessibility Guidelines
+
+### WCAG Compliance
+- **Color Contrast**: Minimum 4.5:1 ratio
+- **Keyboard Navigation**: Full keyboard accessibility
+- **Screen Readers**: Proper ARIA labels
+- **Focus Management**: Visible focus indicators
+- **Semantic HTML**: Proper HTML structure
+
+### Accessibility Implementation
+- Use **semantic HTML elements**
+- Implement **ARIA attributes** where needed
+- Provide **alt text** for images
+- Use **proper heading hierarchy**
+- Ensure **color is not the only indicator**
+
+## Animation & Interactions
+
+### Framer Motion Integration
+- **Page Transitions**: Smooth route transitions
+- **Component Animations**: Micro-interactions
+- **Loading States**: Animated loading indicators
+- **Hover Effects**: Subtle hover animations
+- **Gesture Support**: Touch and drag interactions
+
+### Animation Guidelines
+- **Duration**: 200-300ms for micro-interactions
+- **Easing**: Use Material Design easing curves
+- **Performance**: Use transform and opacity for smooth animations
+- **Accessibility**: Respect prefers-reduced-motion
+- **Mobile**: Optimize for touch interactions
+
+## Component Testing
+
+### Testing Strategy
+- **Unit Tests**: Individual component testing
+- **Integration Tests**: Component interaction testing
+- **Visual Tests**: Screenshot comparison testing
+- **Accessibility Tests**: Automated a11y testing
+- **Performance Tests**: Component performance testing
+
+### Testing Tools
+- **Jest**: Unit testing framework
+- **React Testing Library**: Component testing
+- **Storybook**: Component documentation and testing
+- **Cypress**: End-to-end testing
+- **Lighthouse**: Performance and accessibility testing

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -18,6 +18,13 @@ import {
   Badge,
   Skeleton,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Search,
@@ -30,34 +37,233 @@ import {
   Send,
   AttachFile,
   Image,
+  Lock,
+  Delete,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { messagesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import { ConversationsResponse, MessagesResponse, Conversation, Message as MessageType } from '../types';
+import PageHeader from '../components/PageHeader';
 
 const MessagesPage: React.FC = () => {
-  const navigate = useNavigate();
   const { state } = useAuth();
-  const { t } = useLanguage();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteType, setDeleteType] = useState<'message' | 'conversation' | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const { data: conversationsResponse, isLoading, error } = useQuery({
     queryKey: ['conversations'],
     queryFn: () => messagesAPI.getConversations(),
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    retry: 2, // Retry failed requests up to 2 times
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
   });
 
   const { data: messagesResponse, isLoading: messagesLoading } = useQuery({
     queryKey: ['messages', selectedConversation],
     queryFn: () => messagesAPI.getMessages(selectedConversation!),
     enabled: !!selectedConversation,
+    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    retry: 2, // Retry failed requests up to 2 times
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
   });
 
+  // Get conversations data first
   const conversations: ConversationsResponse | undefined = conversationsResponse?.data?.data;
+
+  // Fetch individual conversation data if not found in conversations list
+  const { data: individualConversationResponse } = useQuery({
+    queryKey: ['conversation', selectedConversation],
+    queryFn: () => messagesAPI.getConversation(selectedConversation!),
+    enabled: !!selectedConversation && !conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation),
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: (data: { content: string; type?: string }) => 
+      messagesAPI.sendMessage(selectedConversation!, data),
+    onMutate: async (newMessage) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['messages', selectedConversation] });
+      
+      // Snapshot the previous value
+      const previousMessages = queryClient.getQueryData(['messages', selectedConversation]);
+      
+      // Optimistically update to the new value
+      queryClient.setQueryData(['messages', selectedConversation], (old: any) => {
+        if (!old) return old;
+        const newMessageData = {
+          id: `temp-${Date.now()}`,
+          conversationId: selectedConversation!,
+          senderId: state.user?.id!,
+          content: newMessage.content,
+          messageType: newMessage.type || 'TEXT',
+          attachments: [],
+          readAt: null,
+          createdAt: new Date().toISOString(),
+          isEncrypted: false,
+          sender: {
+            id: state.user?.id!,
+            companyName: state.user?.companyName,
+            country: state.user?.country
+          }
+        };
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            messages: [...(old.data.messages || []), newMessageData]
+          }
+        };
+      });
+      
+      return { previousMessages };
+    },
+    onSuccess: (response) => {
+      console.log('✅ Message sent successfully:', response.data);
+      // Invalidate to get the real data from server
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // Clear the message input
+      setMessageText('');
+      setSendingMessage(false);
+    },
+    onError: (error, newMessage, context) => {
+      console.error('❌ Failed to send message:', error);
+      // Revert the optimistic update
+      if (context?.previousMessages) {
+        queryClient.setQueryData(['messages', selectedConversation], context.previousMessages);
+      }
+      setSendingMessage(false);
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: ({ conversationId, messageId }: { conversationId: string; messageId: string }) => 
+      messagesAPI.deleteMessage(conversationId, messageId),
+    onSuccess: () => {
+      console.log('🗑️ Message deleted successfully, invalidating queries...');
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard data
+      setDeleteDialogOpen(false);
+    },
+    onError: (error) => {
+      console.error('Failed to delete message:', error);
+    },
+  });
+
+  const deleteConversationMutation = useMutation({
+    mutationFn: (conversationId: string) => messagesAPI.deleteConversation(conversationId),
+    onSuccess: () => {
+      console.log('🗑️ Conversation deleted successfully, invalidating queries...');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard data
+      setSelectedConversation(null);
+      setDeleteDialogOpen(false);
+    },
+    onError: (error) => {
+      console.error('Failed to delete conversation:', error);
+    },
+  });
+
   const messages: MessagesResponse | undefined = messagesResponse?.data?.data;
+
+  // Helper function to get current conversation data
+  const getCurrentConversation = () => {
+    if (!selectedConversation) return null;
+    
+    // First try to find in conversations list
+    const conversationFromList = conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation);
+    if (conversationFromList) {
+      return conversationFromList;
+    }
+    
+    // Fallback to individual conversation data
+    return individualConversationResponse?.data?.data || null;
+  };
+
+  const currentConversation = getCurrentConversation();
+
+
+  // Handle URL parameters to auto-select conversation
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    
+    if (conversationId) {
+      // Always set the conversation ID from URL, regardless of whether conversations are loaded
+      setSelectedConversation(conversationId);
+    }
+  }, [searchParams]);
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedConversation || sendingMessage) {
+      return;
+    }
+
+    setSendingMessage(true);
+    try {
+      await sendMessageMutation.mutateAsync({
+        content: messageText.trim(),
+        type: 'TEXT'
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+
+  const handleKeyPress = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleDeleteMessage = (messageId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setDeleteType('message');
+    setDeleteTargetId(messageId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConversation = (conversationId: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setDeleteType('conversation');
+    setDeleteTargetId(conversationId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTargetId || !deleteType) return;
+
+    if (deleteType === 'message' && selectedConversation) {
+      deleteMessageMutation.mutate({ conversationId: selectedConversation, messageId: deleteTargetId });
+    } else if (deleteType === 'conversation') {
+      deleteConversationMutation.mutate(deleteTargetId);
+    }
+  };
+
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setDeleteType(null);
+    setDeleteTargetId(null);
+  };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -109,14 +315,10 @@ const MessagesPage: React.FC = () => {
   return (
     <Box>
       {/* Header */}
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Messages
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Communicate with buyers and sellers anonymously
-        </Typography>
-      </Box>
+      <PageHeader
+        title="Messages"
+        subtitle="Communicate with buyers and sellers anonymously"
+      />
 
       <Grid container spacing={3}>
         {/* Conversations List */}
@@ -155,24 +357,43 @@ const MessagesPage: React.FC = () => {
               ) : (
                 <List>
                   {(conversations?.conversations || [])
-                    .filter((conv: Conversation) =>
-                      conv.product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      conv.buyer?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .length > 0 ? (
-                    (conversations?.conversations || [])
-                      .filter((conv: Conversation) =>
+                    .filter((conv: Conversation) => {
+                      // Only show conversations that have actual messages
+                      const hasMessages = conv._count?.messages && conv._count.messages > 0;
+                      
+                      // Apply search filter
+                      const matchesSearch = 
                         conv.product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         conv.buyer?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase())
-                      )
+                        conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
+                      
+                      return hasMessages && matchesSearch;
+                    })
+                    .length > 0 ? (
+                    (conversations?.conversations || [])
+                      .filter((conv: Conversation) => {
+                        // Only show conversations that have actual messages
+                        const hasMessages = conv._count?.messages && conv._count.messages > 0;
+                        
+                        // Apply search filter
+                        const matchesSearch = 
+                          conv.product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          conv.buyer?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
+                        
+                        return hasMessages && matchesSearch;
+                      })
                       .map((conversation: Conversation) => (
                         <React.Fragment key={conversation.id}>
                           <ListItem
                             button
                             selected={selectedConversation === conversation.id}
                             onClick={() => setSelectedConversation(conversation.id)}
+                            sx={{
+                              '&:hover .conversation-delete-button': {
+                                opacity: 1,
+                              },
+                            }}
                           >
                             <ListItemAvatar>
                               <Badge
@@ -212,6 +433,27 @@ const MessagesPage: React.FC = () => {
                                 </Box>
                               }
                             />
+                            <Box
+                              className="conversation-delete-button"
+                              sx={{
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                position: 'absolute',
+                                right: 8,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                              }}
+                            >
+                              <Tooltip title="Delete conversation">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={(e) => handleDeleteConversation(conversation.id, e)}
+                                >
+                                  <Delete sx={{ fontSize: 16 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
                           </ListItem>
                           <Divider />
                         </React.Fragment>
@@ -239,18 +481,40 @@ const MessagesPage: React.FC = () => {
             <Card sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
               {/* Conversation Header */}
               <CardContent sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Avatar>
-                    <Business />
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6">
-                      {conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation)?.product?.title || 'Conversation'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation)?.buyer?.companyName || 'Buyer'} • {' '}
-                      {conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation)?.seller?.companyName || 'Seller'}
-                    </Typography>
+                <Box display="flex" alignItems="center" justifyContent="space-between">
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Avatar>
+                      <Business />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6">
+                        {currentConversation?.product?.title || 'Conversation'}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {currentConversation?.buyer?.companyName || 'Buyer'} • {' '}
+                        {currentConversation?.seller?.companyName || 'Seller'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  
+                  {/* Actions */}
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <Chip
+                      icon={<Lock />}
+                      label="End-to-End Encrypted"
+                      color="success"
+                      size="small"
+                      variant="outlined"
+                    />
+                    <Tooltip title="Delete conversation">
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={(e) => handleDeleteConversation(selectedConversation!, e)}
+                      >
+                        <Delete />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </Box>
               </CardContent>
@@ -296,19 +560,52 @@ const MessagesPage: React.FC = () => {
                               borderRadius: 2,
                               bgcolor: message.sender?.id === state.user?.id ? 'primary.main' : 'grey.100',
                               color: message.sender?.id === state.user?.id ? 'white' : 'text.primary',
+                              position: 'relative',
+                              '&:hover .delete-button': {
+                                opacity: 1,
+                              },
                             }}
                           >
                             <Typography variant="body1">
                               {message.content}
                             </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                              }}
-                            >
-                              {formatTime(message.createdAt)}
-                            </Typography>
+                            <Box display="flex" alignItems="center" justifyContent="space-between" mt={1}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                                }}
+                              >
+                                {formatTime(message.createdAt)}
+                              </Typography>
+                              <Box display="flex" alignItems="center" gap={0.5}>
+                                {message.isEncrypted && (
+                                  <>
+                                    <Lock sx={{ fontSize: 12, color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary' }} />
+                                    <Typography variant="caption" sx={{ color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
+                                      E2E
+                                    </Typography>
+                                  </>
+                                )}
+                                <Tooltip title="Delete message">
+                                  <IconButton
+                                    className="delete-button"
+                                    size="small"
+                                    sx={{
+                                      opacity: 0,
+                                      transition: 'opacity 0.2s',
+                                      color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+                                      '&:hover': {
+                                        color: message.sender?.id === state.user?.id ? 'white' : 'error.main',
+                                      },
+                                    }}
+                                    onClick={(e) => handleDeleteMessage(message.id, e)}
+                                  >
+                                    <Delete sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </Box>
                           </Box>
                           {message.sender?.id === state.user?.id && (
                             <Avatar 
@@ -344,15 +641,34 @@ const MessagesPage: React.FC = () => {
                     placeholder="Type your message..."
                     variant="outlined"
                     size="small"
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    disabled={sendingMessage}
+                    multiline
+                    maxRows={3}
                   />
-                  <Button variant="outlined" size="small">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    disabled={sendingMessage}
+                  >
                     <AttachFile />
                   </Button>
-                  <Button variant="outlined" size="small">
+                  <Button 
+                    variant="outlined" 
+                    size="small"
+                    disabled={sendingMessage}
+                  >
                     <Image />
                   </Button>
-                  <Button variant="contained" size="small">
-                    <Send />
+                  <Button 
+                    variant="contained" 
+                    size="small"
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim() || sendingMessage}
+                  >
+                    {sendingMessage ? 'Sending...' : <Send />}
                   </Button>
                 </Box>
               </Box>
@@ -372,6 +688,39 @@ const MessagesPage: React.FC = () => {
           )}
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={cancelDelete}
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+      >
+        <DialogTitle id="delete-dialog-title">
+          Delete {deleteType === 'message' ? 'Message' : 'Conversation'}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-dialog-description">
+            {deleteType === 'message' 
+              ? 'Are you sure you want to delete this message? This action cannot be undone.'
+              : 'Are you sure you want to delete this conversation? This will delete all messages in the conversation and cannot be undone.'
+            }
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDelete} color="primary">
+            Cancel
+          </Button>
+          <Button 
+            onClick={confirmDelete} 
+            color="error" 
+            variant="contained"
+            disabled={deleteMessageMutation.isPending || deleteConversationMutation.isPending}
+          >
+            {deleteMessageMutation.isPending || deleteConversationMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -43,6 +43,8 @@ model User {
   watchlist        WatchlistItem[]
   notifications    Notification[]
   wonAuctions      Auction[] @relation("AuctionWinner")
+  keyExchangesFrom KeyExchange[] @relation("KeyExchangeFrom")
+  keyExchangesTo   KeyExchange[] @relation("KeyExchangeTo")
 
   @@map("users")
 }
@@ -236,6 +238,7 @@ model Conversation {
   buyer   User    @relation("ConversationBuyer", fields: [buyerId], references: [id])
   seller  User    @relation("ConversationSeller", fields: [sellerId], references: [id])
   messages Message[]
+  keyExchanges KeyExchange[]
 
   @@map("conversations")
 }
@@ -250,6 +253,14 @@ model Message {
   attachments    String[]
   readAt         DateTime?
   createdAt      DateTime    @default(now())
+  
+  // End-to-End Encryption Fields
+  isEncrypted    Boolean     @default(false)
+  encryptedContent String?   // Encrypted message content
+  encryptionKeyId String?    // Key ID used for encryption
+  iv             String?    // Initialization vector
+  tag            String?     // Authentication tag
+  keyExchangeId  String?     // Key exchange ID
 
   // Relations
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -257,6 +268,26 @@ model Message {
   receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id])
 
   @@map("messages")
+}
+
+model KeyExchange {
+  id             String   @id @default(cuid())
+  conversationId String
+  fromUserId     String
+  toUserId       String
+  encryptedAESKey String
+  keyId          String
+  publicKey      String
+  status         KeyExchangeStatus @default(PENDING)
+  createdAt      DateTime @default(now())
+  processedAt    DateTime?
+
+  // Relations
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  fromUser     User         @relation("KeyExchangeFrom", fields: [fromUserId], references: [id])
+  toUser       User         @relation("KeyExchangeTo", fields: [toUserId], references: [id])
+
+  @@map("key_exchanges")
 }
 
 model SampleRequest {
@@ -388,6 +419,13 @@ enum BidStatus {
   OUTBID
   WITHDRAWN
   WINNING
+}
+
+enum KeyExchangeStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  EXPIRED
 }
 
 enum NotificationType {

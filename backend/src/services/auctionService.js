@@ -102,7 +102,7 @@ const endAuction = async (auctionId) => {
     const updatedAuction = await prisma.auction.update({
       where: { id: auctionId },
       data: {
-        status: isReserveMet ? 'COMPLETED' : 'NO_SALE',
+        status: 'ENDED',
         endTime: new Date(),
       },
     });
@@ -309,6 +309,7 @@ const getActiveAuctions = async (filters = {}) => {
       minPrice,
       maxPrice,
       country,
+      status = 'ACTIVE',
       sortBy = 'endTime',
       sortOrder = 'asc',
     } = filters;
@@ -317,7 +318,7 @@ const getActiveAuctions = async (filters = {}) => {
 
     // Build where clause
     const where = {
-      status: 'ACTIVE',
+      status: status,
     };
 
     if (search) {
@@ -398,8 +399,17 @@ const getActiveAuctions = async (filters = {}) => {
       prisma.auction.count({ where }),
     ]);
 
+    // Transform the data to match frontend expectations
+    const transformedAuctions = auctions.map(auction => ({
+      ...auction,
+      startsAt: auction.startTime,
+      endsAt: auction.endTime,
+      auctionType: auction.auctionType,
+      minimumBid: auction.startingPrice,
+    }));
+
     return {
-      auctions,
+      auctions: transformedAuctions,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

@@ -1,54 +1,63 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Grid,
   Card,
   CardContent,
   Typography,
-  Button,
-  Chip,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
   Divider,
   Alert,
-  CircularProgress,
   Skeleton,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
-  TrendingUp,
   Inventory,
   Gavel,
   Message,
-  Person,
-  AttachMoney,
   ShoppingCart,
   Visibility,
+  Refresh,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useLanguage } from '../contexts/LanguageContext';
+import { useConversations } from '../hooks/useConversations';
 import { dashboardAPI } from '../services/api';
+import { motion } from 'framer-motion';
+import PageHeader from '../components/PageHeader';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, clearJustLoggedIn } = useAuth();
-  const { t } = useLanguage();
+  const { hasConversations, isLoading: conversationsLoading, error: conversationsError } = useConversations();
+
+  // Debug logging for dashboard
+  console.log('🔍 Dashboard Debug:', {
+    isAuthenticated: state.isAuthenticated,
+    userRole: state.user?.role,
+    hasConversations,
+    conversationsLoading,
+    conversationsError
+  });
+
 
   // State for dashboard data
   const [dashboardData, setDashboardData] = useState({
-    totalProducts: 0,
-    activeAuctions: 0,
-    totalMessages: 0,
-    watchlistItems: 0,
-    recentProducts: [],
-    recentBids: [],
-    recentConversations: [],
+    stats: {
+      totalProducts: 0,
+      activeAuctions: 0,
+      totalMessages: 0,
+      watchlistItems: 0,
+    },
+    recentActivities: [],
+    watchlistItems: [],
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  // State for role change animation
+  const [isRoleChanging, setIsRoleChanging] = useState(false);
+  const [previousRole, setPreviousRole] = useState<string | null>(null);
 
   // Helper function to get display name
   const getDisplayName = () => {
@@ -64,46 +73,80 @@ const DashboardPage: React.FC = () => {
     return 'User';
   };
 
-  // Fetch dashboard data
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await dashboardAPI.getDashboardStats();
-        setDashboardData(response.data.data);
-      } catch (err: any) {
-        console.error('Failed to fetch dashboard data:', err);
-        setError(err.response?.data?.error || 'Failed to load dashboard data');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch dashboard data using React Query
+  const { data: dashboardResponse, isLoading: loading, error, refetch } = useQuery({
+    queryKey: ['dashboard', state.user?.role], // Include user role in query key
+    queryFn: () => dashboardAPI.getDashboardStats(),
+    enabled: state.isAuthenticated,
+    staleTime: 0, // Always consider data stale to force refresh
+    gcTime: 0, // Don't cache data
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Always refetch when component mounts
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+  });
 
-    if (state.isAuthenticated) {
-      fetchDashboardData();
+  // Update local state when query data changes
+  useEffect(() => {
+    if (dashboardResponse?.data?.data) {
+      console.log('📊 Dashboard data fetched:', dashboardResponse.data.data);
+      setDashboardData(dashboardResponse.data.data);
     }
-  }, [state.isAuthenticated]);
+  }, [dashboardResponse]);
+
+  // Log errors
+  useEffect(() => {
+    if (error) {
+      console.error('❌ Dashboard fetch error:', error);
+    }
+  }, [error]);
+
+  // Force refetch when user role changes
+  useEffect(() => {
+    if (state.isAuthenticated && state.user?.role) {
+      // Check if role actually changed
+      if (previousRole && previousRole !== state.user.role) {
+        console.log('🔄 Role changed, starting animation for role:', state.user.role);
+        setIsRoleChanging(true);
+        
+        // Start the role change animation
+        setTimeout(() => {
+          refetch();
+        }, 300); // Small delay to show the transition
+        
+        // Reset animation state after data loads
+        setTimeout(() => {
+          setIsRoleChanging(false);
+        }, 1000);
+      } else {
+        console.log('🔄 Role changed, refetching dashboard data for role:', state.user.role);
+        refetch();
+      }
+      
+      setPreviousRole(state.user.role);
+    }
+  }, [state.user?.role, refetch, state.isAuthenticated, previousRole]);
+
 
 
   const stats = state.user?.role === 'SELLER' ? [
     {
       title: 'My Products',
-      value: loading ? '...' : dashboardData.totalProducts.toString(),
+      value: loading ? '...' : dashboardData.stats?.totalProducts?.toString() || '0',
       icon: <Inventory />,
       color: 'primary',
       action: () => navigate('/products?my=true'),
     },
     {
       title: 'My Auctions',
-      value: loading ? '...' : dashboardData.activeAuctions.toString(),
+      value: loading ? '...' : dashboardData.stats?.activeAuctions?.toString() || '0',
       icon: <Gavel />,
       color: 'secondary',
       action: () => navigate('/auctions?my=true'),
     },
     {
       title: 'Messages',
-      value: loading ? '...' : dashboardData.totalMessages.toString(),
+      value: loading ? '...' : dashboardData.stats?.totalMessages?.toString() || '0',
       icon: <Message />,
       color: 'success',
       action: () => navigate('/messages'),
@@ -118,31 +161,31 @@ const DashboardPage: React.FC = () => {
   ] : [
     {
       title: 'Total Products',
-      value: loading ? '...' : dashboardData.totalProducts.toString(),
+      value: loading ? '...' : dashboardData.stats?.totalProducts?.toString() || '0',
       icon: <Inventory />,
       color: 'primary',
       action: () => navigate('/products'),
     },
     {
       title: 'Active Auctions',
-      value: loading ? '...' : dashboardData.activeAuctions.toString(),
+      value: loading ? '...' : dashboardData.stats?.activeAuctions?.toString() || '0',
       icon: <Gavel />,
       color: 'secondary',
       action: () => navigate('/auctions'),
     },
     {
       title: 'Messages',
-      value: loading ? '...' : dashboardData.totalMessages.toString(),
+      value: loading ? '...' : dashboardData.stats?.totalMessages?.toString() || '0',
       icon: <Message />,
       color: 'success',
       action: () => navigate('/messages'),
     },
     {
       title: 'Watchlist',
-      value: loading ? '...' : dashboardData.watchlistItems.toString(),
+      value: loading ? '...' : dashboardData.stats?.watchlistItems?.toString() || '0',
       icon: <Visibility />,
       color: 'warning',
-      action: () => navigate('/profile?tab=watchlist'),
+      action: () => navigate('/watchlist'),
     },
   ];
 
@@ -157,48 +200,36 @@ const DashboardPage: React.FC = () => {
       icon: React.ReactElement;
     }> = [];
 
-    // Add recent products
-    dashboardData.recentProducts.slice(0, 2).forEach((product: any) => {
-      activities.push({
-        id: `product-${product.id}`,
-        type: 'product',
-        title: 'Product Listed',
-        description: product.title,
-        time: new Date(product.createdAt).toLocaleDateString(),
-        icon: <Inventory />,
-      });
-    });
+    // Use the recentActivities from the API if available, otherwise generate from individual arrays
+    if (dashboardData.recentActivities && dashboardData.recentActivities.length > 0) {
+      dashboardData.recentActivities.slice(0, 5).forEach((activity: any) => {
+        let icon = <Inventory />;
+        if (activity.icon === 'gavel') icon = <Gavel />;
+        else if (activity.icon === 'message') icon = <Message />;
+        else if (activity.icon === 'visibility') icon = <Visibility />;
 
-    // Add recent bids
-    dashboardData.recentBids.slice(0, 2).forEach((bid: any) => {
-      activities.push({
-        id: `bid-${bid.id}`,
-        type: 'auction',
-        title: 'Bid Placed',
-        description: `${bid.auction?.product?.title || 'Auction'} - $${bid.amount}`,
-        time: new Date(bid.createdAt).toLocaleDateString(),
-        icon: <Gavel />,
+        activities.push({
+          id: activity.id,
+          type: activity.type,
+          title: activity.title,
+          description: activity.description,
+          time: new Date(activity.time).toLocaleDateString(),
+          icon: icon,
+        });
       });
-    });
-
-    // Add recent conversations
-    dashboardData.recentConversations.slice(0, 1).forEach((conversation: any) => {
-      activities.push({
-        id: `conversation-${conversation.id}`,
-        type: 'message',
-        title: 'New Message',
-        description: `From ${conversation.otherUser?.companyName || conversation.otherUser?.email}`,
-        time: new Date(conversation.updatedAt).toLocaleDateString(),
-        icon: <Message />,
-      });
-    });
+    } else {
+      // Fallback: No recent activities to show
+      // The backend now only provides unread messages and auction bids
+      // If no activities are returned, the card will show "No recent activity"
+    }
 
     return activities.slice(0, 5); // Limit to 5 activities
   };
 
   const recentActivities = generateRecentActivities();
 
-  const quickActions = state.user?.role === 'SELLER' ? [
+  // Base actions for sellers and buyers
+  const sellerActions = [
     {
       title: 'List Product',
       description: 'Add a new product to sell',
@@ -220,14 +251,9 @@ const DashboardPage: React.FC = () => {
       action: () => navigate('/products?my=true'),
       color: 'success',
     },
-    {
-      title: 'View Messages',
-      description: 'Check your conversations',
-      icon: <Message />,
-      action: () => navigate('/messages'),
-      color: 'info',
-    },
-  ] : [
+  ];
+
+  const buyerActions = [
     {
       title: 'Browse Products',
       description: 'Find materials to buy',
@@ -249,129 +275,304 @@ const DashboardPage: React.FC = () => {
       action: () => navigate('/profile?tab=watchlist'),
       color: 'success',
     },
-    {
-      title: 'View Messages',
-      description: 'Check your conversations',
-      icon: <Message />,
-      action: () => navigate('/messages'),
-      color: 'info',
-    },
   ];
 
+  // Messages action (only show if user has conversations)
+  const messagesAction = {
+    title: 'View Messages',
+    description: 'Check your conversations',
+    icon: <Message />,
+    action: () => navigate('/messages'),
+    color: 'info',
+  };
+
+  // Combine actions based on role and conversation status
+  const quickActions = state.user?.role === 'SELLER' 
+    ? [...sellerActions, ...(hasConversations ? [messagesAction] : [])]
+    : [...buyerActions, ...(hasConversations ? [messagesAction] : [])];
+
   return (
-    <Box>
-      {/* Role-based accent bar */}
-      <Box
-        sx={{
-          height: 4,
-          background: state.user?.role === 'SELLER' 
-            ? 'linear-gradient(90deg, #dc004e 0%, #ff5983 100%)'
-            : 'linear-gradient(90deg, #1976d2 0%, #42a5f5 100%)',
-          mb: 3,
-          transition: 'background 0.3s ease',
-        }}
+    <Box sx={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 100%)',
+      color: 'white'
+    }}>
+      {/* Header Section */}
+      <PageHeader
+        title="Dashboard"
+        subtitle={state.user?.role === 'SELLER' 
+          ? 'Manage your listings, track sales, and connect with buyers.'
+          : 'Discover new products, track your bids, and find the best deals.'
+        }
       />
-      {/* Welcome message for newly logged in users */}
-      {state.justLoggedIn && state.isAuthenticated && (
-        <Alert 
-          severity="success" 
-          sx={{ mb: 3 }}
-          onClose={() => clearJustLoggedIn()}
-        >
-          <Typography variant="h6" gutterBottom>
-            Welcome back, {getDisplayName()}!
-          </Typography>
-          <Typography variant="body2">
-            You have successfully signed in with Google. Here's what's happening with your account today.
-          </Typography>
-        </Alert>
-      )}
 
-      {/* Error message */}
-      {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          onClose={() => setError(null)}
-        >
-          {error}
-        </Alert>
-      )}
+      {/* Alert Messages Container */}
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, position: 'relative', zIndex: 10 }}>
+        {/* Welcome message for newly logged in users */}
+        {state.justLoggedIn && state.isAuthenticated && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Alert 
+              severity="success" 
+              sx={{ 
+                mb: 4,
+                background: 'rgba(99, 102, 241, 0.1)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                color: '#6366F1',
+                position: 'relative',
+                zIndex: 10,
+              }}
+              onClose={() => clearJustLoggedIn()}
+            >
+              <Typography variant="h6" gutterBottom sx={{ color: '#6366F1' }}>
+                Welcome back, {getDisplayName()}!
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                You have successfully signed in with Google. Here's what's happening with your account today.
+              </Typography>
+            </Alert>
+          </motion.div>
+        )}
 
-      {/* Welcome Section */}
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Welcome back, {getDisplayName()}!
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          {state.user?.role === 'SELLER' 
-            ? 'Manage your listings, track sales, and connect with buyers.'
-            : 'Discover new products, track your bids, and find the best deals.'
-          }
-        </Typography>
+        {/* Error message */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 4,
+                backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                border: '1px solid rgba(244, 67, 54, 0.3)',
+                color: '#ff6b6b',
+                position: 'relative',
+                zIndex: 10,
+              }}
+            >
+              {error instanceof Error ? error.message : 'Failed to load dashboard data'}
+            </Alert>
+          </motion.div>
+        )}
       </Box>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} mb={4}>
-        {stats.map((stat, index) => (
-          <Grid item xs={12} sm={6} md={3} key={index}>
-            <Card
-              sx={{
-                cursor: 'pointer',
-                transition: 'transform 0.2s',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                },
-              }}
-              onClick={stat.action}
-            >
-              <CardContent>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box>
-                    {loading ? (
-                      <Skeleton variant="text" width={60} height={40} />
-                    ) : (
-                      <Typography variant="h4" component="div" sx={{ fontWeight: 700 }}>
-                        {stat.value}
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary">
-                      {stat.title}
-                    </Typography>
-                  </Box>
-                  <Avatar
-                    sx={{
-                      bgcolor: `${stat.color}.main`,
-                      width: 56,
-                      height: 56,
+      {/* Welcome Card with Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ 
+          opacity: 1, 
+          y: 0,
+          scale: isRoleChanging ? 0.98 : 1
+        }}
+        transition={{ 
+          duration: isRoleChanging ? 0.3 : 0.6,
+          ease: "easeInOut"
+        }}
+      >
+        <Card
+          sx={{
+            background: 'rgba(17, 17, 17, 0.8)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 3,
+            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+            mb: 6,
+            '&:hover': {
+              transform: 'translateY(-4px)',
+              borderColor: 'rgba(99, 102, 241, 0.3)',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
+            },
+          }}
+        >
+          <CardContent sx={{ p: 4 }}>
+            {/* Welcome Message Header */}
+            <Box sx={{ textAlign: 'center', mb: 4 }}>
+              <motion.div
+                key={state.user?.role}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              >
+                <Typography 
+                  variant="h4" 
+                  sx={{ 
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #6366F1 100%)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    mb: 1,
+                  }}
+                >
+                  Welcome back, {getDisplayName()}!
+                </Typography>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    color: 'rgba(255, 255, 255, 0.8)',
+                    fontWeight: 400,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {state.user?.role === 'SELLER' 
+                    ? 'Here\'s your business overview and key metrics.'
+                    : 'Discover opportunities and track your activity.'
+                  }
+                </Typography>
+              </motion.div>
+              
+            </Box>
+
+            {/* Stats Grid */}
+            <Grid container spacing={3}>
+              {stats.map((stat, index) => (
+                <Grid item xs={12} sm={6} md={3} key={`${state.user?.role}-${index}`}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                    animate={{ 
+                      opacity: isRoleChanging ? 0.7 : 1, 
+                      y: 0, 
+                      scale: isRoleChanging ? 0.95 : 1,
+                      rotateY: isRoleChanging ? 5 : 0
+                    }}
+                    transition={{ 
+                      duration: isRoleChanging ? 0.3 : 0.5, 
+                      delay: isRoleChanging ? 0 : index * 0.1,
+                      ease: "easeInOut"
                     }}
                   >
-                    {stat.icon}
-                  </Avatar>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+                    <Box
+                      sx={{
+                        cursor: 'pointer',
+                        p: 3,
+                        borderRadius: 2,
+                        background: 'rgba(99, 102, 241, 0.05)',
+                        border: '1px solid rgba(99, 102, 241, 0.1)',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          background: 'rgba(99, 102, 241, 0.1)',
+                          borderColor: 'rgba(99, 102, 241, 0.2)',
+                          transform: 'translateY(-2px)',
+                        },
+                      }}
+                      onClick={stat.action}
+                    >
+                      <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Box>
+                          {loading || isRoleChanging ? (
+                            <Skeleton variant="text" width={60} height={40} />
+                          ) : (
+                            <motion.div
+                              key={stat.value}
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ duration: 0.4, ease: "easeOut" }}
+                            >
+                              <Typography 
+                                variant="h3" 
+                                component="div" 
+                                sx={{ 
+                                  fontWeight: 800,
+                                  color: '#6366F1',
+                                  mb: 1,
+                                }}
+                              >
+                                {stat.value}
+                              </Typography>
+                            </motion.div>
+                          )}
+                          <Typography 
+                            variant="h6" 
+                            sx={{ 
+                              color: 'rgba(255, 255, 255, 0.8)',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {stat.title}
+                          </Typography>
+                        </Box>
+                        <Avatar
+                          sx={{
+                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                            color: '#000000',
+                            width: 50,
+                            height: 50,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {stat.icon}
+                        </Avatar>
+                      </Box>
+                    </Box>
+                  </motion.div>
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
+      </motion.div>
+
 
       <Grid container spacing={3}>
         {/* Quick Actions */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+          <Card sx={{
+            background: 'rgba(17, 17, 17, 0.8)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 3,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <Typography 
+                variant="h6" 
+                gutterBottom 
+                sx={{ 
+                  color: 'white',
+                  fontWeight: 600,
+                  mb: 3,
+                  textAlign: 'center'
+                }}
+              >
                 Quick Actions
               </Typography>
-              <Grid container spacing={2}>
+              <Grid container spacing={2} sx={{ flex: 1 }}>
                 {quickActions.map((action, index) => (
-                  <Grid item xs={12} sm={6} key={index}>
-                    <Card
+                  <Grid item xs={12} sm={6} key={`${state.user?.role}-action-${index}`}>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ 
+                        opacity: isRoleChanging ? 0.6 : 1, 
+                        y: 0,
+                        scale: isRoleChanging ? 0.95 : 1
+                      }}
+                      transition={{ 
+                        duration: isRoleChanging ? 0.3 : 0.5, 
+                        delay: isRoleChanging ? 0 : index * 0.1,
+                        ease: "easeOut"
+                      }}
+                    >
+                      <Card
                       sx={{
                         cursor: 'pointer',
-                        transition: 'transform 0.2s',
+                        background: 'rgba(17, 17, 17, 0.6)',
+                        border: '1px solid rgba(99, 102, 241, 0.1)',
+                        borderRadius: 2,
+                        transition: 'all 0.3s ease',
                         '&:hover': {
-                          transform: 'translateY(-2px)',
+                          transform: 'translateY(-4px)',
+                          borderColor: 'rgba(99, 102, 241, 0.3)',
+                          background: 'rgba(17, 17, 17, 0.8)',
+                          boxShadow: '0 8px 20px rgba(99, 102, 241, 0.2)',
                         },
                       }}
                       onClick={action.action}
@@ -379,23 +580,39 @@ const DashboardPage: React.FC = () => {
                       <CardContent sx={{ textAlign: 'center', py: 2 }}>
                         <Avatar
                           sx={{
-                            bgcolor: `${action.color}.main`,
+                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                            color: '#000000',
                             width: 48,
                             height: 48,
                             mx: 'auto',
                             mb: 1,
+                            fontWeight: 600,
                           }}
                         >
                           {action.icon}
                         </Avatar>
-                        <Typography variant="subtitle1" gutterBottom>
+                        <Typography 
+                          variant="subtitle1" 
+                          gutterBottom 
+                          sx={{ 
+                            color: 'white',
+                            fontWeight: 500
+                          }}
+                        >
                           {action.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '0.875rem'
+                          }}
+                        >
                           {action.description}
                         </Typography>
                       </CardContent>
                     </Card>
+                    </motion.div>
                   </Grid>
                 ))}
               </Grid>
@@ -405,11 +622,57 @@ const DashboardPage: React.FC = () => {
 
         {/* Recent Activity */}
         <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Recent Activity
-              </Typography>
+          <Card sx={{
+            background: 'rgba(17, 17, 17, 0.8)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 3,
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
+                <Typography 
+                  variant="h6" 
+                  sx={{ 
+                    color: 'white',
+                    fontWeight: 600,
+                    textAlign: 'center',
+                    flex: 1
+                  }}
+                >
+                  Recent Activity
+                </Typography>
+                <Tooltip title="Refresh recent activity">
+                  <IconButton
+                    onClick={() => refetch()}
+                    disabled={loading}
+                    sx={{
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      '&:hover': {
+                        color: '#6366F1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      },
+                      '&:disabled': {
+                        color: 'rgba(255, 255, 255, 0.3)',
+                      }
+                    }}
+                  >
+                    <Refresh 
+                      sx={{
+                        animation: loading ? 'spin 1s linear infinite' : 'none',
+                        '@keyframes spin': {
+                          '0%': { transform: 'rotate(0deg)' },
+                          '100%': { transform: 'rotate(360deg)' },
+                        },
+                      }}
+                    />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Box sx={{ flex: 1 }}>
               {loading ? (
                 <Box>
                   {[1, 2, 3].map((i) => (
@@ -427,85 +690,94 @@ const DashboardPage: React.FC = () => {
                   ))}
                 </Box>
               ) : recentActivities.length > 0 ? (
-                <List>
-                  {recentActivities.map((activity, index) => (
-                    <React.Fragment key={activity.id}>
-                      <ListItem>
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'primary.main' }}>
-                            {activity.icon}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={activity.title}
-                          secondary={
-                            <Box component="div" sx={{ display: 'block' }}>
-                              <Box component="span" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.875rem' }}>
-                                {activity.description}
-                              </Box>
-                              <Box component="span" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}>
-                                {activity.time}
-                              </Box>
-                            </Box>
+                <Box>
+                  {recentActivities.slice(0, 4).map((activity, index) => (
+                    <Box key={activity.id} sx={{ mb: 2 }}>
+                      <Box 
+                        display="flex" 
+                        alignItems="center" 
+                        sx={{
+                          p: 2,
+                          background: 'rgba(17, 17, 17, 0.4)',
+                          borderRadius: 2,
+                          border: '1px solid rgba(99, 102, 241, 0.1)',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            background: 'rgba(17, 17, 17, 0.6)',
+                            borderColor: 'rgba(99, 102, 241, 0.2)',
                           }
-                          secondaryTypographyProps={{
-                            component: 'div'
-                          }}
-                        />
-                      </ListItem>
-                      {index < recentActivities.length - 1 && <Divider />}
-                    </React.Fragment>
+                        }}
+                      >
+                        <Avatar sx={{ 
+                          background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                          color: '#000000',
+                          fontWeight: 600,
+                          width: 40,
+                          height: 40,
+                          mr: 2
+                        }}>
+                          {activity.icon}
+                        </Avatar>
+                        <Box flex={1}>
+                          <Typography 
+                            variant="subtitle2" 
+                            sx={{ 
+                              color: 'white',
+                              fontWeight: 500,
+                              mb: 0.5
+                            }}
+                          >
+                            {activity.title}
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              color: 'rgba(255, 255, 255, 0.7)',
+                              fontSize: '0.875rem',
+                              mb: 0.5
+                            }}
+                          >
+                            {activity.description}
+                          </Typography>
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              color: 'rgba(255, 255, 255, 0.5)',
+                              fontSize: '0.75rem'
+                            }}
+                          >
+                            {activity.time}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </Box>
                   ))}
-                </List>
+                </Box>
               ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
-                  No recent activity to show
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Account Status */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Account Status
-              </Typography>
-              
-              {/* Verification Status */}
-              <Box display="flex" alignItems="center" gap={2} mb={2}>
-                <Chip
-                  label={state.user?.verificationStatus || 'PENDING'}
-                  color={
-                    state.user?.verificationStatus === 'VERIFIED'
-                      ? 'success'
-                      : state.user?.verificationStatus === 'REJECTED'
-                      ? 'error'
-                      : 'warning'
-                  }
-                />
-                <Typography variant="body2" color="text.secondary">
-                  {state.user?.verificationStatus === 'VERIFIED'
-                    ? 'Your account is verified'
-                    : state.user?.verificationStatus === 'REJECTED'
-                    ? 'Your account verification was rejected'
-                    : 'Your account is pending verification'}
-                </Typography>
-              </Box>
-
-              {state.user?.verificationStatus !== 'VERIFIED' && (
-                <Button
-                  variant="outlined"
-                  onClick={() => navigate('/profile?tab=verification')}
+                <Box 
+                  sx={{ 
+                    textAlign: 'center',
+                    py: 4,
+                    background: 'rgba(17, 17, 17, 0.4)',
+                    borderRadius: 2,
+                    border: '1px solid rgba(99, 102, 241, 0.1)',
+                  }}
                 >
-                  Complete Verification
-                </Button>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      color: 'rgba(255, 255, 255, 0.5)',
+                    }}
+                  >
+                    No recent activity to show
+                  </Typography>
+                </Box>
               )}
+              </Box>
             </CardContent>
           </Card>
         </Grid>
+
       </Grid>
 
     </Box>
