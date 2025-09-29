@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { logger } = require('../utils/logger');
 const { sendAuctionNotification } = require('./emailService');
+const { broadcast, emitToAuction } = require('../utils/socket');
 
 const prisma = new PrismaClient();
 
@@ -52,6 +53,41 @@ const startAuction = async (auctionId) => {
       );
     } catch (emailError) {
       logger.error('Failed to send auction started email:', emailError);
+    }
+
+    // Emit real-time event for auction status change
+    try {
+      const eventData = {
+        auctionId,
+        status: 'ACTIVE',
+        startTime: updatedAuction.startTime,
+        product: {
+          id: auction.productId,
+          title: auction.product.title,
+          sellerId: auction.product.sellerId,
+        },
+        type: 'STARTED'
+      };
+      
+      logger.info(`📡 Broadcasting auction_status_changed event:`, eventData);
+      broadcast('auction_status_changed', eventData);
+      
+      // Emit to auction room
+      const auctionEventData = {
+        auctionId,
+        status: 'ACTIVE',
+        startTime: updatedAuction.startTime,
+      };
+      logger.info(`📡 Emitting auction_started to auction room:`, auctionEventData);
+      emitToAuction(auctionId, 'auction_started', auctionEventData);
+      
+      // Also broadcast to all users for the auctions page
+      logger.info(`📡 Broadcasting auction_started to all users:`, auctionEventData);
+      broadcast('auction_started', auctionEventData);
+      
+      logger.info(`✅ Successfully emitted real-time events for auction ${auctionId}`);
+    } catch (socketError) {
+      logger.error('❌ Failed to emit auction started event:', socketError);
     }
 
     logger.info(`Auction started: ${auctionId}`);
@@ -155,6 +191,53 @@ const endAuction = async (auctionId) => {
       logger.error('Failed to send auction ended email to seller:', emailError);
     }
 
+    // Emit real-time event for auction status change
+    try {
+      const eventData = {
+        auctionId,
+        status: 'ENDED',
+        endTime: updatedAuction.endTime,
+        product: {
+          id: auction.productId,
+          title: auction.product.title,
+          sellerId: auction.product.sellerId,
+        },
+        winner: winningBid ? {
+          id: winningBid.bidderId,
+          companyName: winningBid.bidder.companyName,
+          amount: winningBid.amount,
+        } : null,
+        isReserveMet,
+        type: 'ENDED'
+      };
+      
+      logger.info(`📡 Broadcasting auction_status_changed event:`, eventData);
+      broadcast('auction_status_changed', eventData);
+      
+      // Emit to auction room
+      const auctionEventData = {
+        auctionId,
+        status: 'ENDED',
+        endTime: updatedAuction.endTime,
+        winner: winningBid ? {
+          id: winningBid.bidderId,
+          companyName: winningBid.bidder.companyName,
+          amount: winningBid.amount,
+        } : null,
+        isReserveMet,
+      };
+      logger.info(`📡 Emitting auction_ended to auction room:`, auctionEventData);
+      emitToAuction(auctionId, 'auction_ended', auctionEventData);
+      
+      // Also broadcast to all users for the auctions page
+      logger.info(`📡 Broadcasting auction_ended to all users:`, auctionEventData);
+      broadcast('auction_ended', auctionEventData);
+      
+      logger.info(`✅ Successfully emitted real-time events for auction ${auctionId}`);
+    } catch (socketError) {
+      logger.error('❌ Failed to emit auction ended event:', socketError);
+    }
+
     logger.info(
       `Auction ended: ${auctionId}, Status: ${updatedAuction.status}`
     );
@@ -195,6 +278,11 @@ const placeBid = async (auctionId, bidderId, amount) => {
 
     if (new Date() > auction.endTime) {
       throw new Error('Auction has ended');
+    }
+
+    // Check if bidder is the seller
+    if (auction.product.sellerId === bidderId) {
+      throw new Error('Sellers cannot bid on their own auctions');
     }
 
     // Check minimum bid
@@ -289,7 +377,16 @@ const getAuctionDetails = async (auctionId) => {
       throw new Error('Auction not found');
     }
 
-    return auction;
+    // Transform the data to match frontend expectations
+    const transformedAuction = {
+      ...auction,
+      startsAt: auction.startTime,
+      endsAt: auction.endTime,
+      auctionType: auction.auctionType,
+      minimumBid: auction.startingPrice,
+    };
+
+    return transformedAuction;
   } catch (error) {
     logger.error('Get auction details error:', error);
     throw error;
@@ -477,8 +574,17 @@ const getUserAuctions = async (userId, filters = {}) => {
       prisma.auction.count({ where }),
     ]);
 
+    // Transform the data to match frontend expectations
+    const transformedAuctions = auctions.map(auction => ({
+      ...auction,
+      startsAt: auction.startTime,
+      endsAt: auction.endTime,
+      auctionType: auction.auctionType,
+      minimumBid: auction.startingPrice,
+    }));
+
     return {
-      auctions,
+      auctions: transformedAuctions,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -550,8 +656,20 @@ const getUserBids = async (userId, filters = {}) => {
       prisma.bid.count({ where }),
     ]);
 
+    // Transform auction data to match frontend expectations
+    const transformedBids = bids.map(bid => ({
+      ...bid,
+      auction: {
+        ...bid.auction,
+        startsAt: bid.auction.startTime,
+        endsAt: bid.auction.endTime,
+        auctionType: bid.auction.auctionType,
+        minimumBid: bid.auction.startingPrice,
+      },
+    }));
+
     return {
-      bids,
+      bids: transformedBids,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -608,11 +726,168 @@ const processScheduledAuctions = async () => {
       }
     }
 
+    // Emit real-time events for status changes
+    if (scheduledAuctions.length > 0 || activeAuctions.length > 0) {
+      try {
+        broadcast('auction_batch_processed', {
+          startedCount: scheduledAuctions.length,
+          endedCount: activeAuctions.length,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (socketError) {
+        logger.error('Failed to emit auction batch processed event:', socketError);
+      }
+    }
+
     logger.info(
       `Processed ${scheduledAuctions.length} scheduled auctions and ${activeAuctions.length} active auctions`
     );
+
+    // Return counts for cron job logging
+    return {
+      startedCount: scheduledAuctions.length,
+      endedCount: activeAuctions.length
+    };
   } catch (error) {
     logger.error('Process scheduled auctions error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Restart an ended auction
+ */
+const restartAuction = async (auctionId, sellerId, customStartTime = null, customEndTime = null) => {
+  try {
+    const auction = await prisma.auction.findUnique({
+      where: { id: auctionId },
+      include: {
+        product: {
+          include: {
+            seller: true,
+          },
+        },
+      },
+    });
+
+    if (!auction) {
+      throw new Error('Auction not found');
+    }
+
+    // Check if user is the seller
+    if (auction.product.sellerId !== sellerId) {
+      throw new Error('Only the seller can restart this auction');
+    }
+
+    // Check if auction is ended
+    if (auction.status !== 'ENDED') {
+      throw new Error('Only ended auctions can be restarted');
+    }
+
+    // Calculate new start and end times
+    let newStartTime, newEndTime, newStatus;
+    
+    if (customStartTime && customEndTime) {
+      // Use custom times provided by user
+      newStartTime = new Date(customStartTime);
+      newEndTime = new Date(customEndTime);
+      
+      // Validate custom times
+      const now = new Date();
+      if (newStartTime <= now) {
+        throw new Error('Start time must be in the future');
+      }
+      if (newEndTime <= newStartTime) {
+        throw new Error('End time must be after start time');
+      }
+      
+      // If start time is in the future, set status to SCHEDULED
+      newStatus = newStartTime > now ? 'SCHEDULED' : 'ACTIVE';
+    } else {
+      // Use default behavior (immediate restart with original duration)
+      const now = new Date();
+      const duration = auction.endTime.getTime() - auction.startTime.getTime();
+      newStartTime = now;
+      newEndTime = new Date(now.getTime() + duration);
+      newStatus = 'ACTIVE'; // Immediate restart is always active
+    }
+
+    // Update auction with new times and reset status
+    const updatedAuction = await prisma.auction.update({
+      where: { id: auctionId },
+      data: {
+        status: newStatus,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        currentBid: auction.startingPrice, // Reset to starting price
+        bidCount: 0, // Reset bid count
+        winnerId: null, // Clear winner
+      },
+    });
+
+    // Update product status to ACTIVE
+    await prisma.product.update({
+      where: { id: auction.productId },
+      data: { status: 'ACTIVE' },
+    });
+
+    // Clear all previous bids
+    await prisma.bid.deleteMany({
+      where: { auctionId: auctionId },
+    });
+
+    // Send notification to seller
+    try {
+      await sendAuctionNotification(
+        auction.product.seller.email,
+        updatedAuction,
+        'RESTARTED'
+      );
+    } catch (emailError) {
+      logger.error('Failed to send auction restarted email:', emailError);
+    }
+
+    // Emit real-time event for auction restart
+    try {
+      const eventData = {
+        auctionId,
+        status: newStatus,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        product: {
+          id: auction.productId,
+          title: auction.product.title,
+          sellerId: auction.product.sellerId,
+        },
+        type: 'RESTARTED'
+      };
+      
+      logger.info(`📡 Broadcasting auction_restarted event:`, eventData);
+      broadcast('auction_restarted', eventData);
+      
+      // Emit to auction room
+      const auctionEventData = {
+        auctionId,
+        status: newStatus,
+        startTime: newStartTime,
+        endTime: newEndTime,
+        currentBid: auction.startingPrice,
+        bidCount: 0,
+      };
+      logger.info(`📡 Emitting auction_restarted to auction room:`, auctionEventData);
+      emitToAuction(auctionId, 'auction_restarted', auctionEventData);
+      
+      logger.info(`✅ Successfully emitted real-time events for auction restart ${auctionId}`);
+    } catch (socketError) {
+      logger.error('❌ Failed to emit auction restarted event:', socketError);
+    }
+
+    logger.info(
+      `Auction restarted: ${auctionId}, Status: ${updatedAuction.status}`
+    );
+    return updatedAuction;
+  } catch (error) {
+    logger.error('Restart auction error:', error);
     throw error;
   }
 };
@@ -685,4 +960,5 @@ module.exports = {
   getUserBids,
   processScheduledAuctions,
   sendEndingSoonNotifications,
+  restartAuction,
 };

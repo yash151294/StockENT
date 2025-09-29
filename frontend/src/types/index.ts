@@ -7,6 +7,7 @@ export interface User {
   contactPerson?: string;
   phone?: string;
   country?: string;
+  profileImageUrl?: string;
   verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
   isActive: boolean;
   lastLoginAt?: string;
@@ -163,6 +164,7 @@ export interface Conversation {
   buyer?: User;
   seller?: User;
   messages?: Message[];
+  unreadCount?: number;
   _count?: {
     messages: number;
   };

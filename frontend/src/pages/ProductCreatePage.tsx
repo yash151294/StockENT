@@ -32,6 +32,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { productsAPI, categoriesAPI } from '../services/api';
 import PageHeader from '../components/PageHeader';
+import NumericInput from '../components/NumericInput';
+import CalendarInput from '../components/CalendarInput';
 
 interface ProductFormData {
   title: string;
@@ -128,6 +130,10 @@ const ProductCreatePage: React.FC = () => {
     location: '',
     country: '',
     minOrderQuantity: '',
+    auctionStartTime: '',
+    auctionEndTime: '',
+    minimumBid: '',
+    reservePrice: '',
   });
   
   const [tagInput, setTagInput] = useState('');
@@ -355,6 +361,11 @@ const ProductCreatePage: React.FC = () => {
       newErrors.minOrderQuantity = 'Valid minimum order quantity is required';
     }
 
+    // Validate that at least one image is selected
+    if (selectedImages.length === 0) {
+      newErrors.images = 'At least one product image is required';
+    }
+
     if (formData.listingType === 'AUCTION') {
       if (!formData.auctionStartTime) {
         newErrors.auctionStartTime = 'Auction start time is required';
@@ -440,7 +451,7 @@ const ProductCreatePage: React.FC = () => {
       {/* Header */}
       <PageHeader
         title="List New Product"
-        subtitle="Add a new product to your inventory and reach potential buyers worldwide"
+        subtitle="Add a new product to your inventory today"
         showBackButton={true}
         backPath="/products"
       />
@@ -471,10 +482,10 @@ const ProductCreatePage: React.FC = () => {
               {/* Image Upload Section */}
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>
-                  Product Images
+                  Product Images <span style={{ color: 'red' }}>*</span>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Upload up to 4 images (max 10MB each). Images will be automatically compressed if needed.
+                  Upload at least 1 image (up to 4 images, max 10MB each). Images will be automatically compressed if needed.
                 </Typography>
                 
                 <Paper
@@ -658,29 +669,33 @@ const ProductCreatePage: React.FC = () => {
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <TextField
+                <NumericInput
                   fullWidth
                   label="Price"
-                  type="number"
                   value={formData.price}
-                  onChange={(e) => handleInputChange('price', e.target.value)}
+                  onChange={(value) => handleInputChange('price', value)}
                   error={!!errors.price}
                   helperText={errors.price}
-                  inputProps={{ min: 0, step: 0.01 }}
+                  allowDecimals={true}
+                  allowNegative={false}
+                  min={0}
+                  step={0.01}
+                  precision={2}
                   required
                 />
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <TextField
+                <NumericInput
                   fullWidth
                   label="Quantity"
-                  type="number"
                   value={formData.quantity}
-                  onChange={(e) => handleInputChange('quantity', e.target.value)}
+                  onChange={(value) => handleInputChange('quantity', value)}
                   error={!!errors.quantity}
                   helperText={errors.quantity}
-                  inputProps={{ min: 1 }}
+                  allowDecimals={false}
+                  allowNegative={false}
+                  min={1}
                   required
                 />
               </Grid>
@@ -736,15 +751,18 @@ const ProductCreatePage: React.FC = () => {
               </Grid>
 
               <Grid item xs={12} md={4}>
-                <TextField
+                <NumericInput
                   fullWidth
                   label="Minimum Order Quantity"
-                  type="number"
                   value={formData.minOrderQuantity}
-                  onChange={(e) => handleInputChange('minOrderQuantity', e.target.value)}
+                  onChange={(value) => handleInputChange('minOrderQuantity', value)}
                   error={!!errors.minOrderQuantity}
                   helperText={errors.minOrderQuantity}
-                  inputProps={{ min: 0, step: 0.01 }}
+                  allowDecimals={true}
+                  allowNegative={false}
+                  min={0}
+                  step={0.01}
+                  precision={2}
                   required
                 />
               </Grid>
@@ -775,55 +793,61 @@ const ProductCreatePage: React.FC = () => {
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
+                    <CalendarInput
                       fullWidth
                       label="Auction Start Time"
-                      type="datetime-local"
                       value={formData.auctionStartTime || ''}
-                      onChange={(e) => handleInputChange('auctionStartTime', e.target.value)}
+                      onChange={(value) => handleInputChange('auctionStartTime', value)}
                       error={!!errors.auctionStartTime}
                       helperText={errors.auctionStartTime}
-                      InputLabelProps={{ shrink: true }}
+                      format="datetime-local"
+                      minDate={new Date().toISOString().slice(0, 16)}
                       required
                     />
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
+                    <CalendarInput
                       fullWidth
                       label="Auction End Time"
-                      type="datetime-local"
                       value={formData.auctionEndTime || ''}
-                      onChange={(e) => handleInputChange('auctionEndTime', e.target.value)}
+                      onChange={(value) => handleInputChange('auctionEndTime', value)}
                       error={!!errors.auctionEndTime}
                       helperText={errors.auctionEndTime}
-                      InputLabelProps={{ shrink: true }}
+                      format="datetime-local"
+                      minDate={formData.auctionStartTime || new Date().toISOString().slice(0, 16)}
                       required
                     />
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
+                    <NumericInput
                       fullWidth
                       label="Minimum Bid"
-                      type="number"
                       value={formData.minimumBid || ''}
-                      onChange={(e) => handleInputChange('minimumBid', e.target.value)}
+                      onChange={(value) => handleInputChange('minimumBid', value)}
                       error={!!errors.minimumBid}
                       helperText={errors.minimumBid}
-                      inputProps={{ min: 0, step: 0.01 }}
+                      allowDecimals={true}
+                      allowNegative={false}
+                      min={0}
+                      step={0.01}
+                      precision={2}
                       required
                     />
                   </Grid>
 
                   <Grid item xs={12} md={6}>
-                    <TextField
+                    <NumericInput
                       fullWidth
                       label="Reserve Price (Optional)"
-                      type="number"
                       value={formData.reservePrice || ''}
-                      onChange={(e) => handleInputChange('reservePrice', e.target.value)}
-                      inputProps={{ min: 0, step: 0.01 }}
+                      onChange={(value) => handleInputChange('reservePrice', value)}
+                      allowDecimals={true}
+                      allowNegative={false}
+                      min={0}
+                      step={0.01}
+                      precision={2}
                     />
                   </Grid>
                 </>

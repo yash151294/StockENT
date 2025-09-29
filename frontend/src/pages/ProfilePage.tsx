@@ -64,6 +64,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { motion } from 'framer-motion';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 
 // Types
 interface ProfileData {
@@ -582,48 +583,39 @@ const ProfilePage: React.FC = () => {
 
   return (
     <Box sx={{ 
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-      py: 4,
-      px: { xs: 2, sm: 3, md: 4 },
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 100%)',
+      color: 'white'
     }}>
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <PageHeader
-          title="Profile"
-          subtitle="Manage your account and company information"
-        />
-      </motion.div>
+      <PageHeader
+        title="Account"
+        subtitle="Manage your account and company information"
+      />
 
-      <Grid container spacing={4}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <Grid container spacing={4} sx={{ alignItems: 'stretch' }}>
         {/* Profile Summary */}
-        <Grid item xs={12} md={4}>
+        <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column' }}>
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <Card
-              sx={{
-                background: 'rgba(17, 17, 17, 0.8)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(99, 102, 241, 0.1)',
-                borderRadius: 3,
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  borderColor: 'rgba(99, 102, 241, 0.3)',
-                  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-                },
+            <LiquidGlassCard
+              variant="default"
+              hoverEffect={true}
+              glassIntensity="medium"
+              borderGlow={true}
+              customSx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              <CardContent sx={{ p: 4 }}>
-                <Box display="flex" flexDirection="column" alignItems="center" textAlign="center">
+              <CardContent sx={{ p: 4, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <Box display="flex" flexDirection="column" alignItems="center" textAlign="center" flex={1}>
                 <Badge
                   overlap="circular"
                   anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
@@ -735,7 +727,7 @@ const ProfilePage: React.FC = () => {
                 />
               </Box>
             </CardContent>
-          </Card>
+          </LiquidGlassCard>
           </motion.div>
 
           {/* Quick Stats */}
@@ -743,119 +735,120 @@ const ProfilePage: React.FC = () => {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           >
-            <Card 
-              sx={{ 
+            <LiquidGlassCard
+              variant="default"
+              hoverEffect={true}
+              glassIntensity="medium"
+              borderGlow={true}
+              customSx={{
                 mt: 3,
-                background: 'rgba(17, 17, 17, 0.8)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(99, 102, 241, 0.1)',
-                borderRadius: 3,
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  transform: 'translateY(-4px)',
-                  borderColor: 'rgba(99, 102, 241, 0.3)',
-                  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-                },
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 3,
               }}
             >
-              <CardContent sx={{ p: 3 }}>
-                <Typography 
-                  variant="h6" 
-                  gutterBottom
-                  sx={{
-                    color: 'white',
-                    fontWeight: 600,
-                    mb: 3,
-                  }}
-                >
-                  Account Stats
-                </Typography>
-                <List dense>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <ShoppingCart sx={{ color: '#6366f1' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ color: 'white', fontWeight: 500 }}>
-                          Products Listed
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                          {profileData._count?.products || 0}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <Message sx={{ color: '#6366f1' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ color: 'white', fontWeight: 500 }}>
-                          Conversations
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                          {profileData._count?.conversations || 0}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <Bookmark sx={{ color: '#6366f1' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ color: 'white', fontWeight: 500 }}>
-                          Watchlist Items
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                          {profileData._count?.watchlist || 0}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                  <ListItem sx={{ px: 0 }}>
-                    <ListItemIcon sx={{ minWidth: 40 }}>
-                      <Gavel sx={{ color: '#6366f1' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography sx={{ color: 'white', fontWeight: 500 }}>
-                          Bids Made
-                        </Typography>
-                      }
-                      secondary={
-                        <Typography sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
-                          {profileData._count?.bids || 0}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                </List>
-              </CardContent>
-            </Card>
+              <Typography 
+                variant="h6" 
+                gutterBottom
+                sx={{
+                  color: 'white',
+                  fontWeight: 600,
+                  mb: 4,
+                  textAlign: 'center',
+                }}
+              >
+                Account Stats
+              </Typography>
+              
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', maxWidth: 280 }}>
+                {/* Products Stat */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  gap: 2,
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'rgba(99, 102, 241, 0.05)',
+                  border: '1px solid rgba(99, 102, 241, 0.1)',
+                }}>
+                  <ShoppingCart sx={{ color: '#6366f1', fontSize: 24 }} />
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '1.1rem' }}>
+                      {profileData._count?.products || 0}
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.875rem' }}>
+                      Products Listed
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Watchlist Stat */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  gap: 2,
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'rgba(99, 102, 241, 0.05)',
+                  border: '1px solid rgba(99, 102, 241, 0.1)',
+                }}>
+                  <Bookmark sx={{ color: '#6366f1', fontSize: 24 }} />
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '1.1rem' }}>
+                      {profileData._count?.watchlist || 0}
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.875rem' }}>
+                      Watchlist Items
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Bids Stat */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  gap: 2,
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'rgba(99, 102, 241, 0.05)',
+                  border: '1px solid rgba(99, 102, 241, 0.1)',
+                }}>
+                  <Gavel sx={{ color: '#6366f1', fontSize: 24 }} />
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography sx={{ color: 'white', fontWeight: 600, fontSize: '1.1rem' }}>
+                      {profileData._count?.bids || 0}
+                    </Typography>
+                    <Typography sx={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '0.875rem' }}>
+                      Bids Made
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </LiquidGlassCard>
           </motion.div>
         </Grid>
 
         {/* Profile Details */}
-        <Grid item xs={12} md={8}>
+        <Grid item xs={12} md={8} sx={{ display: 'flex', flexDirection: 'column' }}>
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
           >
             <Card
               sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
                 background: 'rgba(17, 17, 17, 0.8)',
                 backdropFilter: 'blur(20px)',
                 border: '1px solid rgba(99, 102, 241, 0.1)',
@@ -899,7 +892,7 @@ const ProfilePage: React.FC = () => {
                 <Tab label="Watchlist" />
               </Tabs>
             
-            <CardContent sx={{ p: 4 }}>
+            <CardContent sx={{ p: 4, flex: 1, display: 'flex', flexDirection: 'column' }}>
               {activeTab === 0 && (
                 <Box>
                   <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
@@ -1396,14 +1389,6 @@ const ProfilePage: React.FC = () => {
                                 >
                                   View
                                 </Button>
-                                <IconButton
-                                  color="error"
-                                  size="small"
-                                  onClick={() => handleRemoveFromWatchlist(item.product?.id)}
-                                  disabled={removeFromWatchlistMutation.isPending}
-                                >
-                                  <Delete />
-                                </IconButton>
                               </Box>
                             </Box>
                           </CardContent>
@@ -1435,6 +1420,7 @@ const ProfilePage: React.FC = () => {
           </motion.div>
         </Grid>
       </Grid>
+      </Box>
 
       {/* Hidden file input for avatar upload */}
       <input

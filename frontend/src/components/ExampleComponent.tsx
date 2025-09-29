@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import LiquidGlassCard from './LiquidGlassCard'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
@@ -33,7 +34,7 @@ export default function ExampleComponent() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <Card>
+        <LiquidGlassCard variant="default" hoverEffect={false} glassIntensity="medium">
           <CardHeader>
             <CardTitle className="flex items-center">
               <Search className="h-5 w-5 mr-2" />
@@ -70,7 +71,7 @@ export default function ExampleComponent() {
               </motion.div>
             )}
           </CardContent>
-        </Card>
+        </LiquidGlassCard>
       </motion.div>
 
       {/* Product Cards */}
@@ -84,7 +85,7 @@ export default function ExampleComponent() {
             whileHover={{ scale: 1.05 }}
             className="group"
           >
-            <Card className="overflow-hidden">
+            <LiquidGlassCard variant="default" hoverEffect={true} glassIntensity="medium" className="overflow-hidden">
               <div className="h-48 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
                 <motion.div
                   whileHover={{ rotate: 360 }}
@@ -133,7 +134,7 @@ export default function ExampleComponent() {
                   </Button>
                 </motion.div>
               </CardContent>
-            </Card>
+            </LiquidGlassCard>
           </motion.div>
         ))}
       </div>
@@ -144,7 +145,7 @@ export default function ExampleComponent() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.4 }}
       >
-        <Card>
+        <LiquidGlassCard variant="default" hoverEffect={false} glassIntensity="medium">
           <CardHeader>
             <CardTitle>Interactive Demo</CardTitle>
             <CardDescription>
@@ -187,7 +188,7 @@ export default function ExampleComponent() {
               </motion.div>
             </div>
           </CardContent>
-        </Card>
+        </LiquidGlassCard>
       </motion.div>
     </div>
   )

@@ -36,11 +36,12 @@ interface AuthState {
   isAuthenticated: boolean;
   justLoggedIn: boolean;
   showFirstLoginMessage: boolean;
+  loginMethod: 'email' | 'google' | null;
 }
 
 type AuthAction =
   | { type: 'LOGIN_START' }
-  | { type: 'LOGIN_SUCCESS'; payload: { user: User; isFirstLogin?: boolean; justLoggedIn?: boolean } }
+  | { type: 'LOGIN_SUCCESS'; payload: { user: User; isFirstLogin?: boolean; justLoggedIn?: boolean; loginMethod?: 'email' | 'google' } }
   | { type: 'LOGIN_FAILURE'; payload: string }
   | { type: 'LOGOUT' }
   | { type: 'UPDATE_USER'; payload: User }
@@ -55,6 +56,7 @@ const initialState: AuthState = {
   isAuthenticated: false,
   justLoggedIn: false,
   showFirstLoginMessage: false,
+  loginMethod: null,
 };
 
 // Reducer
@@ -73,6 +75,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         isAuthenticated: true,
         justLoggedIn: action.payload.justLoggedIn !== false, // Only set to true if explicitly true, default to true for new logins
         showFirstLoginMessage: action.payload.isFirstLogin || false,
+        loginMethod: action.payload.loginMethod || null,
       };
     case 'LOGIN_FAILURE':
       return {
@@ -88,6 +91,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         isLoading: false,
         isAuthenticated: false,
         justLoggedIn: false,
+        loginMethod: null,
       };
     case 'UPDATE_USER':
       return {
@@ -174,6 +178,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []); // Empty dependency array to run only once
 
+  // Listen for authentication logout events from API interceptor
+  useEffect(() => {
+    const handleAuthLogout = (event: CustomEvent) => {
+      logger.warn('Received auth logout event:', event.detail?.reason);
+      dispatch({ type: 'LOGOUT' });
+    };
+
+    window.addEventListener('auth:logout', handleAuthLogout as EventListener);
+    
+    return () => {
+      window.removeEventListener('auth:logout', handleAuthLogout as EventListener);
+    };
+  }, []);
+
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -187,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Tokens are automatically set in cookies by the server
         dispatch({
           type: 'LOGIN_SUCCESS',
-          payload: { user, justLoggedIn: true },
+          payload: { user, justLoggedIn: true, loginMethod: 'email' },
         });
         
         logger.info('User logged in successfully');
@@ -256,7 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Tokens are already set in cookies by the server during OAuth callback
     dispatch({
       type: 'LOGIN_SUCCESS',
-      payload: { user, isFirstLogin, justLoggedIn: true },
+      payload: { user, isFirstLogin, justLoggedIn: true, loginMethod: 'google' },
     });
     
     logger.info('User logged in with OAuth successfully');

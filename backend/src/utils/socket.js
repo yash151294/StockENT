@@ -160,13 +160,20 @@ const initSocket = (server) => {
           return;
         }
 
+        // Check if conversation is closed
+        if (conversation.status === 'CLOSED') {
+          socket.emit('error', {
+            message: 'Cannot send messages to a closed conversation',
+          });
+          return;
+        }
+
         // Prepare message data
         const messageData = {
           conversationId,
           senderId: socket.user.id,
           content,
           messageType,
-          status: 'SENT',
         };
 
         // Add encryption fields if provided
@@ -199,10 +206,18 @@ const initSocket = (server) => {
           data: { updatedAt: new Date() },
         });
 
-        // Emit to conversation room
+        // Emit to conversation room with proper sender info
         io.to(`conversation:${conversationId}`).emit(
           'message_received',
-          message
+          {
+            ...message,
+            conversationId,
+            sender: {
+              id: socket.user.id,
+              companyName: socket.user.companyName,
+              country: socket.user.country || null,
+            }
+          }
         );
 
         // Emit to other user's personal room
@@ -212,7 +227,14 @@ const initSocket = (server) => {
             : conversation.buyerId;
         io.to(`user:${otherUserId}`).emit('new_message_notification', {
           conversationId,
-          message,
+          message: {
+            ...message,
+            sender: {
+              id: socket.user.id,
+              companyName: socket.user.companyName,
+              country: socket.user.country || null,
+            }
+          },
           product: conversation.product,
         });
 
@@ -446,8 +468,8 @@ const initSocket = (server) => {
       }
     });
 
-    // Handle conversation deletion
-    socket.on('delete_conversation', async (data) => {
+    // Handle conversation closure
+    socket.on('close_conversation', async (data) => {
       try {
         const { conversationId } = data;
 
@@ -466,33 +488,40 @@ const initSocket = (server) => {
           return;
         }
 
-        // Delete conversation (cascade will handle messages)
-        await prisma.conversation.delete({
+        // Update conversation status to CLOSED
+        const updatedConversation = await prisma.conversation.update({
           where: { id: conversationId },
+          data: { 
+            status: 'CLOSED',
+            updatedAt: new Date()
+          },
         });
 
-        // Emit deletion to conversation room and both users
-        io.to(`conversation:${conversationId}`).emit('conversation_deleted', {
+        // Emit closure to conversation room and both users
+        io.to(`conversation:${conversationId}`).emit('conversation_closed', {
           conversationId,
-          deletedBy: socket.user.id,
+          closedBy: socket.user.id,
+          status: 'CLOSED',
         });
 
         // Emit to both users' personal rooms
-        io.to(`user:${conversation.buyerId}`).emit('conversation_deleted', {
+        io.to(`user:${conversation.buyerId}`).emit('conversation_closed', {
           conversationId,
-          deletedBy: socket.user.id,
+          closedBy: socket.user.id,
+          status: 'CLOSED',
         });
-        io.to(`user:${conversation.sellerId}`).emit('conversation_deleted', {
+        io.to(`user:${conversation.sellerId}`).emit('conversation_closed', {
           conversationId,
-          deletedBy: socket.user.id,
+          closedBy: socket.user.id,
+          status: 'CLOSED',
         });
 
         logger.info(
-          `Conversation deleted via socket: ${conversationId} by user: ${socket.user.id}`
+          `Conversation closed via socket: ${conversationId} by user: ${socket.user.id}`
         );
       } catch (error) {
-        logger.error('Socket delete conversation error:', error);
-        socket.emit('error', { message: 'Failed to delete conversation' });
+        logger.error('Socket close conversation error:', error);
+        socket.emit('error', { message: 'Failed to close conversation' });
       }
     });
 
@@ -501,6 +530,22 @@ const initSocket = (server) => {
       logger.info(
         `User disconnected: ${socket.user.email} (${socket.id}) - ${reason}`
       );
+    });
+
+    // Handle test events
+    socket.on('test_event', (data) => {
+      logger.info(`Test event received from ${socket.user.email}:`, data);
+      socket.emit('test_response', { message: 'Test response from server', timestamp: new Date() });
+    });
+
+    // Handle test events
+    socket.on('test', (data) => {
+      logger.info(`Test event received from ${socket.user.email}:`, data);
+      socket.emit('test_response', { 
+        message: 'Test response from server', 
+        timestamp: new Date().toISOString(),
+        user: socket.user.email 
+      });
     });
 
     // Handle errors
@@ -592,8 +637,8 @@ const emitToConversation = (conversationId, event, data) => {
  */
 const broadcast = (event, data) => {
   try {
-    const socket = getSocket();
-    socket.emit(event, data);
+    const io = getSocket();
+    io.emit(event, data);
     logger.debug(`Broadcasted: ${event}`);
   } catch (error) {
     logger.error(`Failed to broadcast ${event}:`, error);

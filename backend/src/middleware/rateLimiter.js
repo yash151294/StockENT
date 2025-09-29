@@ -6,7 +6,7 @@ const { logger } = require('../utils/logger');
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 100000 : 100, // Very permissive in development
+  max: process.env.NODE_ENV === 'development' ? 1000000 : 100, // Very permissive in development
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
@@ -27,7 +27,7 @@ const generalLimiter = rateLimit({
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 50 : 5, // More permissive in development
+  max: process.env.NODE_ENV === 'development' ? 10000 : 5, // Much more permissive in development
   message: {
     success: false,
     error: 'Too many authentication attempts, please try again later.',
@@ -69,7 +69,7 @@ const passwordResetLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 10000 : 200, // Very permissive in development
+  max: process.env.NODE_ENV === 'development' ? 50000 : 200, // Very permissive in development
   message: {
     success: false,
     error: 'Too many API requests, please try again later.',

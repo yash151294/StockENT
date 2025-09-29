@@ -4,6 +4,7 @@ import {
   Grid,
   Card,
   CardContent,
+  CardMedia,
   Typography,
   Button,
   Chip,
@@ -32,6 +33,8 @@ import {
   Message,
   Favorite,
   FavoriteBorder,
+  Gavel,
+  AttachMoney,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +45,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { motion } from 'framer-motion';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 
 const WatchlistPage: React.FC = () => {
   const navigate = useNavigate();
@@ -100,28 +104,14 @@ const WatchlistPage: React.FC = () => {
     }
     
     if (!product || !product.seller) {
-      console.error('Product data not available');
+      console.error('Product data not available:', { product, seller: product?.seller });
       navigate('/messages');
       return;
     }
     
-    try {
-      // Create conversation with seller
-      const response = await messagesAPI.createConversation({
-        productId: product.id,
-        sellerId: product.seller.id
-      });
-      
-      // Invalidate conversations query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      
-      // Navigate to messages page with the new conversation
-      navigate(`/messages?conversation=${response.data.data.id}`);
-      
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-      navigate('/messages');
-    }
+    // Navigate to messages page with product and seller info for new message composition
+    // The messages page will handle the new conversation creation when user sends first message
+    navigate(`/messages?product=${product.id}&seller=${product.seller.id}`);
   };
 
   // Filter and sort watchlist items
@@ -175,6 +165,43 @@ const WatchlistPage: React.FC = () => {
     return Array.from(categorySet) as string[];
   }, [watchlist]);
 
+  // Helper functions for consistent styling
+  const formatPrice = (price: number, currency: string) => {
+    const symbols: { [key: string]: string } = {
+      USD: '$',
+      INR: '₹',
+      CNY: '¥',
+      TRY: '₺',
+    };
+    return `${symbols[currency] || currency} ${price.toFixed(2)}`;
+  };
+
+  const getListingTypeColor = (type: string) => {
+    switch (type) {
+      case 'FIXED_PRICE':
+        return 'success';
+      case 'AUCTION':
+        return 'secondary';
+      case 'NEGOTIABLE':
+        return 'warning';
+      default:
+        return 'default';
+    }
+  };
+
+  const getListingTypeIcon = (type: string) => {
+    switch (type) {
+      case 'FIXED_PRICE':
+        return <ShoppingCart />;
+      case 'AUCTION':
+        return <Gavel />;
+      case 'NEGOTIABLE':
+        return <AttachMoney />;
+      default:
+        return <ShoppingCart />;
+    }
+  };
+
   if (watchlistError) {
     return (
       <Box>
@@ -197,225 +224,283 @@ const WatchlistPage: React.FC = () => {
       />
 
       {/* Filters and Search */}
-      <Card sx={{ mb: 3 }}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <LiquidGlassCard variant="default" hoverEffect={true} glassIntensity="high" customSx={{ mb: 3 }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={4}>
-              <TextField
-                fullWidth
-                placeholder="Search watchlist..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid item xs={12} sm={3} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Sort by</InputLabel>
-                <Select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  startAdornment={<Sort />}
-                >
-                  <MenuItem value="newest">Newest</MenuItem>
-                  <MenuItem value="oldest">Oldest</MenuItem>
-                  <MenuItem value="name">Name</MenuItem>
-                  <MenuItem value="category">Category</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={3} md={2}>
-              <FormControl fullWidth>
-                <InputLabel>Category</InputLabel>
-                <Select
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  startAdornment={<FilterList />}
-                >
-                  <MenuItem value="all">All Categories</MenuItem>
-                  {categories.map((category) => (
-                    <MenuItem key={category} value={category}>
-                      {category}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={12} md={4}>
-              <Box display="flex" gap={1} flexWrap="wrap">
-                <Chip
-                  label={`${filteredAndSortedItems.length} items`}
-                  color="primary"
-                  variant="outlined"
-                />
-                {searchTerm && (
-                  <Chip
-                    label={`Search: "${searchTerm}"`}
-                    onDelete={() => setSearchTerm('')}
-                    color="secondary"
-                    variant="outlined"
-                  />
-                )}
-                {filterCategory !== 'all' && (
-                  <Chip
-                    label={`Category: ${filterCategory}`}
-                    onDelete={() => setFilterCategory('all')}
-                    color="secondary"
-                    variant="outlined"
-                  />
-                )}
-              </Box>
-            </Grid>
-          </Grid>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 3, 
+            alignItems: 'center', 
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            width: '100%'
+          }}>
+            <TextField
+              placeholder="Search watchlist..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              sx={{ 
+                minWidth: 220, 
+                maxWidth: 300,
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>Sort by</InputLabel>
+              <Select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                label="Sort by"
+              >
+                <MenuItem value="newest">Newest</MenuItem>
+                <MenuItem value="oldest">Oldest</MenuItem>
+                <MenuItem value="name">Name</MenuItem>
+                <MenuItem value="category">Category</MenuItem>
+              </Select>
+            </FormControl>
+            
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                label="Category"
+              >
+                <MenuItem value="all">All Categories</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category} value={category}>
+                    {category}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
         </CardContent>
-      </Card>
+        </LiquidGlassCard>
+      </Box>
 
       {/* Watchlist Items */}
-      {watchlistLoading ? (
-        <Box>
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} sx={{ mb: 2 }}>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Skeleton variant="rectangular" width={120} height={120} />
-                  <Box flex={1}>
-                    <Skeleton variant="text" height={32} />
-                    <Skeleton variant="text" height={24} width="80%" />
-                    <Skeleton variant="text" height={20} width="60%" />
-                    <Box display="flex" gap={1} mt={1}>
-                      <Skeleton variant="rectangular" width={80} height={24} />
-                      <Skeleton variant="rectangular" width={100} height={24} />
-                    </Box>
-                  </Box>
-                  <Box display="flex" flexDirection="column" gap={1}>
-                    <Skeleton variant="rectangular" width={80} height={32} />
-                    <Skeleton variant="rectangular" width={80} height={32} />
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        {watchlistLoading ? (
+          <Grid container spacing={3}>
+          {Array.from({ length: 12 }).map((_, index) => (
+            <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
+              <LiquidGlassCard
+                variant="default"
+                hoverEffect={false}
+                glassIntensity="medium"
+                customSx={{
+                  borderRadius: 3,
+                  height: '100%',
+                  minHeight: '500px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <Skeleton variant="rectangular" height={200} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                <CardContent>
+                  <Skeleton variant="text" height={24} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                  <Skeleton variant="text" height={20} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                  <Skeleton variant="text" height={16} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                </CardContent>
+              </LiquidGlassCard>
+            </Grid>
           ))}
-        </Box>
+        </Grid>
       ) : filteredAndSortedItems.length > 0 ? (
-        <Grid container spacing={2}>
+        <Grid container spacing={3}>
           {filteredAndSortedItems.map((item: any) => (
-            <Grid item xs={12} sm={6} lg={4} key={item.id}>
+            <Grid item xs={12} sm={6} md={4} lg={3} key={item.id}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card 
-                  sx={{ 
+                <LiquidGlassCard
+                  variant="default"
+                  hoverEffect={true}
+                  glassIntensity="medium"
+                  borderGlow={true}
+                  onClick={() => navigate(`/products/${item.product?.id}`)}
+                  customSx={{
                     height: '100%',
+                    minHeight: '500px',
                     display: 'flex',
                     flexDirection: 'column',
-                    transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: 4,
-                    }
                   }}
                 >
-                  <Box
+                  <CardMedia
                     component="img"
-                    src={getImageUrl(item.product?.images?.[0]?.imageUrl)}
+                    height="200"
+                    image={getImageUrl(item.product?.images?.[0]?.imageUrl)}
                     alt={item.product?.title}
-                    sx={{
-                      width: '100%',
-                      height: 200,
+                    sx={{ 
                       objectFit: 'cover',
-                    }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = getImageUrl(null);
+                      borderTopLeftRadius: 12,
+                      borderTopRightRadius: 12,
                     }}
                   />
-                  <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                      <Typography variant="h6" noWrap sx={{ flex: 1, mr: 1 }}>
+                  <CardContent sx={{ 
+                    p: 3, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    flex: 1,
+                    minHeight: '300px',
+                    justifyContent: 'space-between'
+                  }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+                      <Typography 
+                        variant="h6" 
+                        component="h3" 
+                        noWrap 
+                        sx={{ 
+                          flex: 1, 
+                          mr: 1,
+                          color: 'white',
+                          fontWeight: 600,
+                        }}
+                      >
                         {item.product?.title}
                       </Typography>
-                      <IconButton
-                        color="error"
-                        size="small"
-                        onClick={() => handleRemoveFromWatchlist(item.product?.id)}
-                        disabled={removeFromWatchlistMutation.isPending}
-                        sx={{ flexShrink: 0 }}
-                      >
-                        <Delete />
-                      </IconButton>
+                      <Box display="flex" gap={1} alignItems="center">
+                        <Chip
+                          icon={getListingTypeIcon(item.product?.listingType)}
+                          label={item.product?.listingType?.replace('_', ' ')}
+                          size="small"
+                          color={getListingTypeColor(item.product?.listingType)}
+                          sx={{
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            color: '#6366F1',
+                            border: '1px solid rgba(99, 102, 241, 0.3)',
+                          }}
+                        />
+                        <Chip
+                          label={item.product?.category?.name || 'Category'}
+                          size="small"
+                          color="secondary"
+                          variant="outlined"
+                          sx={{
+                            backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                            color: '#A855F7',
+                            border: '1px solid rgba(168, 85, 247, 0.3)',
+                          }}
+                        />
+                      </Box>
                     </Box>
                     
                     <Typography 
                       variant="body2" 
-                      color="text.secondary" 
                       sx={{ 
+                        color: 'rgba(255, 255, 255, 0.7)',
                         mb: 2,
+                        lineHeight: 1.5,
+                        height: '72px',
                         display: '-webkit-box',
-                        WebkitLineClamp: 2,
+                        WebkitLineClamp: 3,
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                       }}
                     >
-                      {item.product?.description}
+                      {item.product?.description?.substring(0, 100)}...
                     </Typography>
                     
-                    <Box display="flex" alignItems="center" gap={1} mb={2}>
-                      <Chip
-                        label={item.product?.category?.name || 'Category'}
-                        size="small"
-                        color="secondary"
-                        variant="outlined"
-                        sx={{
-                          backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                          color: '#A855F7',
-                          border: '1px solid rgba(168, 85, 247, 0.3)',
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography 
+                        variant="h6" 
+                        sx={{ 
+                          color: '#6366F1',
+                          fontWeight: 700,
                         }}
-                      />
-                      <Typography variant="caption" color="text.secondary">
-                        Added {new Date(item.createdAt).toLocaleDateString()}
+                      >
+                        {formatPrice(item.product?.basePrice, item.product?.currency)}
+                      </Typography>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: 'rgba(255, 255, 255, 0.6)',
+                        }}
+                      >
+                        {item.product?.quantityAvailable} {item.product?.unit}
                       </Typography>
                     </Box>
                     
-                    <Box sx={{ mt: 'auto' }}>
-                      <Box display="flex" gap={1} mb={1}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: 'rgba(255, 255, 255, 0.6)',
+                        }}
+                      >
+                        {item.product?.seller?.companyName || 'Unknown Seller'}
+                      </Typography>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          color: 'rgba(255, 255, 255, 0.6)',
+                        }}
+                      >
+                        {item.product?.location || 'Unknown Location'}
+                      </Typography>
+                    </Box>
+                    
+                    <Box display="flex" gap={1} mt="auto" justifyContent="center">
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<Visibility />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/products/${item.product?.id}`);
+                        }}
+                        sx={{
+                          borderColor: 'rgba(99, 102, 241, 0.4)',
+                          color: '#6366F1',
+                          '&:hover': {
+                            borderColor: '#6366F1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                          }
+                        }}
+                      >
+                        View
+                      </Button>
+                      {/* Only show Contact button if current user is not the seller */}
+                      {state.user?.id !== item.product?.seller?.id && (
                         <Button
                           variant="contained"
                           size="small"
-                          fullWidth
-                          onClick={() => navigate(`/products/${item.product?.id}`)}
-                          startIcon={<Visibility />}
-                        >
-                          View Details
-                        </Button>
-                      </Box>
-                      
-                      <Box display="flex" gap={1}>
-                        <Button
-                          variant="outlined"
-                          size="small"
-                          fullWidth
-                          onClick={() => handleContactSeller(item.product)}
                           startIcon={<Message />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleContactSeller(item.product);
+                          }}
+                          sx={{
+                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                            color: '#000000',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
+                            }
+                          }}
                         >
-                          Contact Seller
+                          Contact
                         </Button>
-                      </Box>
+                      )}
                     </Box>
                   </CardContent>
-                </Card>
+                </LiquidGlassCard>
               </motion.div>
             </Grid>
           ))}
-        </Grid>
-      ) : (
-        <Box textAlign="center" py={8}>
+          </Grid>
+        ) : (
+          <Box textAlign="center" py={8}>
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -452,8 +537,9 @@ const WatchlistPage: React.FC = () => {
               </Button>
             </Box>
           </motion.div>
-        </Box>
-      )}
+          </Box>
+        )}
+      </Box>
 
       {/* Remove from Watchlist Confirmation Dialog */}
       <Dialog

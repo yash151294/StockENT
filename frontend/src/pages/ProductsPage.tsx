@@ -31,23 +31,27 @@ import {
   Gavel,
   AttachMoney,
   Message,
+  Edit,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { productsAPI, categoriesAPI, messagesAPI } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 
 // Memoized ProductCard component for better performance
-const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingTypeColor, getListingTypeIcon }: {
+const ProductCard = memo(({ product, onView, onContact, onEdit, formatPrice, getListingTypeColor, getListingTypeIcon, currentUserId }: {
   product: any;
   onView: (id: string) => void;
   onContact: (id: string) => void;
+  onEdit: (id: string) => void;
   formatPrice: (price: number, currency: string) => string;
   getListingTypeColor: (type: string) => any;
   getListingTypeIcon: (type: string) => React.ReactElement;
+  currentUserId?: string;
 }) => {
   const theme = useTheme();
   
@@ -56,25 +60,18 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
   
   
   return (
-    <Card
-      sx={{
-        cursor: 'pointer',
-        background: 'rgba(17, 17, 17, 0.8)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(99, 102, 241, 0.1)',
-        borderRadius: 3,
-        transition: 'all 0.3s ease',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-        height: '100%',
+    <LiquidGlassCard
+      variant="default"
+      hoverEffect={true}
+      glassIntensity="medium"
+      borderGlow={true}
+      onClick={() => onView(product.id)}
+      customSx={{
+        height: '520px', // Fixed height for all cards
         display: 'flex',
         flexDirection: 'column',
-        '&:hover': {
-          transform: 'translateY(-8px)',
-          borderColor: 'rgba(99, 102, 241, 0.3)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-        },
+        overflow: 'hidden', // Prevent content overflow
       }}
-      onClick={() => onView(product.id)}
     >
       <CardMedia
         component="img"
@@ -87,7 +84,14 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
           borderTopRightRadius: 12,
         }}
       />
-      <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
+      <CardContent sx={{ 
+        p: 3, 
+        display: 'flex', 
+        flexDirection: 'column', 
+        flex: 1,
+        height: '320px', // Fixed height for content area
+        overflow: 'hidden' // Prevent content overflow
+      }}>
         <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
           <Typography 
             variant="h6" 
@@ -136,12 +140,13 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
             lineHeight: 1.5,
             flex: 1,
             display: '-webkit-box',
-            WebkitLineClamp: 3,
+            WebkitLineClamp: 2, // Reduced to 2 lines for consistent height
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
+            minHeight: '40px', // Ensure minimum height for description
           }}
         >
-          {product.description.substring(0, 100)}...
+          {product.description.substring(0, 80)}...
         </Typography>
         
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
@@ -183,7 +188,17 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
           </Typography>
         </Box>
         
-        <Box display="flex" gap={1} mt="auto" justifyContent="center">
+        <Box 
+          display="flex" 
+          gap={1} 
+          mt="auto" 
+          justifyContent="center"
+          alignItems="center"
+          sx={{ 
+            height: '48px', // Fixed height for button container
+            flexShrink: 0 // Prevent shrinking
+          }}
+        >
           <Button
             variant="outlined"
             size="small"
@@ -195,6 +210,7 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
             sx={{
               borderColor: 'rgba(99, 102, 241, 0.4)',
               color: '#6366F1',
+              minWidth: '80px', // Ensure consistent button width
               '&:hover': {
                 borderColor: '#6366F1',
                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -203,27 +219,51 @@ const ProductCard = memo(({ product, onView, onContact, formatPrice, getListingT
           >
             View
           </Button>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Message />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onContact(product.id);
-            }}
-            sx={{
-              background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
-              color: '#000000',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
-              }
-            }}
-          >
-            Contact
-          </Button>
+          {/* Show Contact button for buyers, Edit button for sellers viewing their own products */}
+          {currentUserId !== product.seller?.id ? (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Message />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onContact(product.id);
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                color: '#000000',
+                minWidth: '80px', // Ensure consistent button width
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
+                }
+              }}
+            >
+              Contact
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Edit />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(product.id); // Navigate to edit page
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)',
+                color: '#000000',
+                minWidth: '80px', // Ensure consistent button width
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #D97706 0%, #EA580C 100%)',
+                }
+              }}
+            >
+              Edit
+            </Button>
+          )}
         </Box>
       </CardContent>
-    </Card>
+    </LiquidGlassCard>
   );
 });
 
@@ -231,9 +271,16 @@ ProductCard.displayName = 'ProductCard';
 
 const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state: authState } = useAuth();
-  const isMobile = useMediaQuery(useTheme().breakpoints.down('sm'));
-  const isTablet = useMediaQuery(useTheme().breakpoints.down('md'));
+  const queryClient = useQueryClient();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // Check if we should show only user's products
+  const searchParams = new URLSearchParams(location.search);
+  const showMyProducts = searchParams.get('my') === 'true';
   
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -253,17 +300,24 @@ const ProductsPage: React.FC = () => {
   const previousDataRef = useRef<any>(null);
 
   const { data, isLoading, error, isFetching, refetch } = useQuery({
-    queryKey: ['products', page, searchQuery, filters],
+    queryKey: ['products', page, searchQuery, filters, showMyProducts],
     queryFn: async () => {
       try {
-        const response = await productsAPI.getProducts({
-          page,
-          limit: isMobile ? 8 : isTablet ? 10 : 12,
-          search: searchQuery,
-          ...filters,
-        });
+        const response = showMyProducts 
+          ? await productsAPI.getMyProducts({
+              page,
+              limit: isMobile ? 8 : isTablet ? 10 : 12,
+              search: searchQuery,
+              ...filters,
+            })
+          : await productsAPI.getProducts({
+              page,
+              limit: isMobile ? 8 : isTablet ? 10 : 12,
+              search: searchQuery,
+              ...filters,
+            });
         return response;
-      } catch (error) {
+      } catch (error: any) {
         console.error('Products fetch error:', error);
         throw error;
       }
@@ -339,33 +393,27 @@ const ProductsPage: React.FC = () => {
     navigate(`/products/${productId}`);
   }, [navigate]);
 
+  const handleEditProduct = useCallback((productId: string) => {
+    navigate(`/products/${productId}/edit`);
+  }, [navigate]);
+
   const handleContactSeller = useCallback(async (productId: string) => {
     if (!authState.isAuthenticated) {
       navigate('/login');
       return;
     }
     
-    try {
-      // Find the product to get seller information
-      const product = displayData?.data?.data?.products?.find((p: any) => p.id === productId);
-      if (!product || !product.seller) {
-        navigate('/messages');
-        return;
-      }
-      
-      // Create conversation with seller
-      const response = await messagesAPI.createConversation({
-        productId: product.id,
-        sellerId: product.seller.id
-      });
-      
-      // Navigate to messages page with the new conversation
-      navigate(`/messages?conversation=${response.data.data.id}`);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-      // Fallback to opening messages page
+    // Find the product to get seller information
+    const product = displayData?.data?.data?.products?.find((p: any) => p.id === productId);
+    if (!product || !product.seller) {
+      console.error('Product or seller not found:', { product, seller: product?.seller });
       navigate('/messages');
+      return;
     }
+    
+    // Navigate to messages page with product and seller info for new message composition
+    // The messages page will handle the new conversation creation when user sends first message
+    navigate(`/messages?product=${product.id}&seller=${product.seller.id}`);
   }, [authState.isAuthenticated, navigate, displayData]);
 
 
@@ -439,13 +487,15 @@ const ProductsPage: React.FC = () => {
         justifyContent: 'center',
         p: 4
       }}>
-        <Card sx={{ 
-          maxWidth: 500, 
-          p: 4,
-          background: 'rgba(17, 17, 17, 0.8)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(99, 102, 241, 0.1)',
-        }}>
+        <LiquidGlassCard
+          variant="default"
+          hoverEffect={false}
+          glassIntensity="medium"
+          customSx={{
+            maxWidth: 500, 
+            p: 4,
+          }}
+        >
           <Alert 
             severity="error" 
             sx={{ mb: 3 }}
@@ -471,7 +521,7 @@ const ProductsPage: React.FC = () => {
           >
             Refresh Page
           </Button>
-        </Card>
+        </LiquidGlassCard>
       </Box>
     );
   }
@@ -484,68 +534,31 @@ const ProductsPage: React.FC = () => {
     }}>
       {/* Header */}
       <PageHeader
-        title="Products"
-        subtitle="Discover textile materials from verified suppliers worldwide"
+        title={showMyProducts ? "My Products" : "Products"}
+        subtitle={showMyProducts 
+          ? "Manage your product listings and track their performance"
+          : "Discover textile materials from verified suppliers worldwide"
+        }
       />
 
 
       {/* Search and Filters - Liquid Glass Style */}
-      <Box sx={{ 
-        mb: 4, 
-        p: 3, 
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'linear-gradient(135deg, rgba(17, 17, 17, 0.8) 0%, rgba(26, 26, 26, 0.6) 100%)',
-        borderRadius: 3,
-        border: '1px solid rgba(99, 102, 241, 0.2)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(45deg, rgba(99, 102, 241, 0.1) 0%, transparent 25%, transparent 75%, rgba(99, 102, 241, 0.1) 100%)',
-          animation: 'liquidFlow 8s ease-in-out infinite',
-          pointerEvents: 'none',
-          zIndex: 1,
-        },
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%)',
-          animation: 'liquidFlow 12s ease-in-out infinite reverse',
-          pointerEvents: 'none',
-          zIndex: 1,
-        },
-        '& > *': {
-          position: 'relative',
-          zIndex: 2,
-        },
-        '&:hover': {
-          '&::before': {
-            animationDuration: '4s',
-          },
-          '&::after': {
-            animationDuration: '6s',
-          },
-        },
-      }}>
-        
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 3, 
-          alignItems: 'center', 
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          width: '100%'
-        }}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <LiquidGlassCard 
+          variant="default" 
+          hoverEffect={true} 
+          glassIntensity="high" 
+          customSx={{ mb: 4 }}
+        >
+          <CardContent sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 3, 
+            alignItems: 'center', 
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            width: '100%'
+          }}>
           {/* Search Input */}
           <TextField
             placeholder="Search products..."
@@ -769,12 +782,14 @@ const ProductsPage: React.FC = () => {
           >
             {filters.sortOrder === 'desc' ? '↓' : '↑'}
           </Button>
-        </Box>
+          </Box>
+        </CardContent>
+        </LiquidGlassCard>
       </Box>
 
 
       {/* Products Grid */}
-      <Box sx={{ width: '100%', overflow: 'auto', position: 'relative', px: { xs: 2, md: 0 } }}>
+      <Box sx={{ width: '100%', position: 'relative', px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Loading indicator for background fetching */}
         {(isFetching || isTransitioning) && !showLoading && (
           <Box
@@ -823,19 +838,21 @@ const ProductsPage: React.FC = () => {
           <Grid container spacing={3}>
             {Array.from({ length: 12 }).map((_, index) => (
               <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
-                <Card sx={{
-                  background: 'rgba(17, 17, 17, 0.8)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(99, 102, 241, 0.1)',
-                  borderRadius: 3,
-                }}>
+                <LiquidGlassCard
+                  variant="default"
+                  hoverEffect={false}
+                  glassIntensity="medium"
+                  customSx={{
+                    borderRadius: 3,
+                  }}
+                >
                   <Skeleton variant="rectangular" height={200} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                   <CardContent>
                     <Skeleton variant="text" height={24} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                     <Skeleton variant="text" height={20} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                     <Skeleton variant="text" height={16} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                   </CardContent>
-                </Card>
+                </LiquidGlassCard>
               </Grid>
             ))}
           </Grid>
@@ -849,9 +866,11 @@ const ProductsPage: React.FC = () => {
                       product={product}
                       onView={handleViewProduct}
                       onContact={handleContactSeller}
+                      onEdit={handleEditProduct}
                       formatPrice={formatPrice}
                       getListingTypeColor={getListingTypeColor}
                       getListingTypeIcon={getListingTypeIcon}
+                      currentUserId={authState.user?.id}
                     />
                   </Grid>
                 ))}

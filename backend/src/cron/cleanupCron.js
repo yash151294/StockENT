@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const { logger } = require('../utils/logger');
+const { cleanupEmptyConversations, cleanupOldEmptyConversations, cleanupAbandonedConversations } = require('../services/messageService');
 
 const prisma = new PrismaClient();
 
@@ -38,15 +39,63 @@ const cleanupMessagesJob = cron.schedule(
   { scheduled: false }
 );
 
+const cleanupEmptyConversationsJob = cron.schedule(
+  '0 */6 * * *', // Every 6 hours
+  async () => {
+    try {
+      logger.info('Running empty conversations cleanup job...');
+      const result = await cleanupEmptyConversations();
+      logger.info(`Cleaned up ${result.deletedCount} empty conversations`);
+    } catch (error) {
+      logger.error('Empty conversations cleanup job failed:', error);
+    }
+  },
+  { scheduled: false }
+);
+
+const cleanupOldEmptyConversationsJob = cron.schedule(
+  '0 2 * * *', // Daily at 2 AM
+  async () => {
+    try {
+      logger.info('Running old empty conversations cleanup job...');
+      const result = await cleanupOldEmptyConversations();
+      logger.info(`Cleaned up ${result.deletedCount} old empty conversations`);
+    } catch (error) {
+      logger.error('Old empty conversations cleanup job failed:', error);
+    }
+  },
+  { scheduled: false }
+);
+
+const cleanupAbandonedConversationsJob = cron.schedule(
+  '0 */2 * * *', // Every 2 hours
+  async () => {
+    try {
+      logger.info('Running abandoned conversations cleanup job...');
+      const result = await cleanupAbandonedConversations();
+      logger.info(`Cleaned up ${result.deletedCount} abandoned conversations`);
+    } catch (error) {
+      logger.error('Abandoned conversations cleanup job failed:', error);
+    }
+  },
+  { scheduled: false }
+);
+
 const startCleanupJobs = () => {
   cleanupRefreshTokensJob.start();
   cleanupMessagesJob.start();
+  cleanupEmptyConversationsJob.start();
+  cleanupOldEmptyConversationsJob.start();
+  cleanupAbandonedConversationsJob.start();
   logger.info('Cleanup cron jobs started');
 };
 
 const stopCleanupJobs = () => {
   cleanupRefreshTokensJob.stop();
   cleanupMessagesJob.stop();
+  cleanupEmptyConversationsJob.stop();
+  cleanupOldEmptyConversationsJob.stop();
+  cleanupAbandonedConversationsJob.stop();
   logger.info('Cleanup cron jobs stopped');
 };
 

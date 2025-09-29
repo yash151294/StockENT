@@ -309,6 +309,7 @@ const processProductImages = async (files) => {
 };
 
 module.exports = {
+  upload,
   uploadProductImages,
   uploadProfilePicture,
   uploadAvatar,

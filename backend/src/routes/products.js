@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
 const {
+  upload,
   uploadProductImages,
   handleUploadError,
 } = require('../middleware/upload');
@@ -20,6 +21,7 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductDeletionStatus,
   getUserProducts,
   addToWatchlist,
   removeFromWatchlist,
@@ -214,9 +216,20 @@ router.post(
  */
 router.put(
   '/:id',
-  [authenticateToken, validateJoi(updateProductSchema)],
+  [
+    authenticateToken,
+    upload.array('images', 4), // Allow up to 4 images
+    handleUploadError,
+  ],
   updateProduct
 );
+
+/**
+ * @route   GET /api/products/:id/deletion-status
+ * @desc    Get product deletion status and constraints
+ * @access  Private (Seller)
+ */
+router.get('/:id/deletion-status', authenticateToken, getProductDeletionStatus);
 
 /**
  * @route   DELETE /api/products/:id

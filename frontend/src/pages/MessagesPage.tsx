@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -7,225 +7,393 @@ import {
   Typography,
   Button,
   Avatar,
-  Chip,
   TextField,
-  InputAdornment,
   List,
   ListItem,
-  ListItemAvatar,
   ListItemText,
+  ListItemAvatar,
   Divider,
+  IconButton,
   Badge,
-  Skeleton,
   Alert,
+  Skeleton,
+  CircularProgress,
+  Chip,
+  Paper,
+  InputAdornment,
+  Menu,
+  MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
-  IconButton,
-  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
+  Send,
+  AttachFile,
+  MoreVert,
   Search,
+  FilterList,
   Message,
   Person,
   Business,
-  AttachMoney,
-  ShoppingCart,
   Gavel,
-  Send,
-  AttachFile,
-  Image,
-  Lock,
+  ShoppingCart,
+  Visibility,
   Delete,
+  Archive,
+  MarkAsUnread,
+  Block,
+  Report,
 } from '@mui/icons-material';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { messagesAPI } from '../services/api';
+import { messagesAPI, productsAPI, usersAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { ConversationsResponse, MessagesResponse, Conversation, Message as MessageType } from '../types';
+import { useSocket } from '../contexts/SocketContext';
+import { useNotification } from '../contexts/NotificationContext';
+import { getImageUrl } from '../utils/imageUtils';
+import { motion } from 'framer-motion';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassCard from '../components/LiquidGlassCard';
+import { Conversation, Message as MessageType } from '../types';
 
 const MessagesPage: React.FC = () => {
-  const { state } = useAuth();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [messageText, setMessageText] = useState('');
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deleteType, setDeleteType] = useState<'message' | 'conversation' | null>(null);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const { state } = useAuth();
+  const { socket, isConnected } = useSocket();
+  const { showSuccess, showWarning, showError, markMessageNotificationsAsRead } = useNotification();
+  const queryClient = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: conversationsResponse, isLoading, error } = useQuery({
-    queryKey: ['conversations'],
-    queryFn: () => messagesAPI.getConversations(),
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    retry: 2, // Retry failed requests up to 2 times
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+  // State management
+  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+
+  // Get conversation ID from URL params
+  const conversationId = searchParams.get('conversation');
+  const productId = searchParams.get('product');
+  const sellerId = searchParams.get('seller');
+
+  // Debug logging
+  console.log('MessagesPage URL params:', { conversationId, productId, sellerId });
+
+  // Fetch product and seller data for new conversation
+  const { data: productData } = useQuery({
+    queryKey: ['product', productId],
+    queryFn: () => productsAPI.getProduct(productId!),
+    enabled: !!productId,
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  const { data: messagesResponse, isLoading: messagesLoading } = useQuery({
+  // API Queries
+  const { 
+    data: conversations, 
+    isLoading: conversationsLoading, 
+    error: conversationsError,
+    refetch: refetchConversations
+  } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: () => messagesAPI.getConversations(),
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const { 
+    data: messages, 
+    isLoading: messagesLoading, 
+    error: messagesError,
+    refetch: refetchMessages
+  } = useQuery({
     queryKey: ['messages', selectedConversation],
     queryFn: () => messagesAPI.getMessages(selectedConversation!),
     enabled: !!selectedConversation,
-    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
-    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    retry: 2, // Retry failed requests up to 2 times
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
-  });
-
-  // Get conversations data first
-  const conversations: ConversationsResponse | undefined = conversationsResponse?.data?.data;
-
-  // Fetch individual conversation data if not found in conversations list
-  const { data: individualConversationResponse } = useQuery({
-    queryKey: ['conversation', selectedConversation],
-    queryFn: () => messagesAPI.getConversation(selectedConversation!),
-    enabled: !!selectedConversation && !conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation),
-    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false,
     retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 1 * 60 * 1000, // 1 minute
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: (data: { content: string; type?: string }) => 
-      messagesAPI.sendMessage(selectedConversation!, data),
-    onMutate: async (newMessage) => {
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['messages', selectedConversation] });
-      
-      // Snapshot the previous value
-      const previousMessages = queryClient.getQueryData(['messages', selectedConversation]);
-      
-      // Optimistically update to the new value
-      queryClient.setQueryData(['messages', selectedConversation], (old: any) => {
-        if (!old) return old;
-        const newMessageData = {
-          id: `temp-${Date.now()}`,
-          conversationId: selectedConversation!,
-          senderId: state.user?.id!,
-          content: newMessage.content,
-          messageType: newMessage.type || 'TEXT',
-          attachments: [],
-          readAt: null,
-          createdAt: new Date().toISOString(),
-          isEncrypted: false,
-          sender: {
-            id: state.user?.id!,
-            companyName: state.user?.companyName,
-            country: state.user?.country
-          }
-        };
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            messages: [...(old.data.messages || []), newMessageData]
-          }
-        };
-      });
-      
-      return { previousMessages };
-    },
-    onSuccess: (response) => {
-      console.log('✅ Message sent successfully:', response.data);
-      // Invalidate to get the real data from server
-      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      // Clear the message input
-      setMessageText('');
-      setSendingMessage(false);
-    },
-    onError: (error, newMessage, context) => {
-      console.error('❌ Failed to send message:', error);
-      // Revert the optimistic update
-      if (context?.previousMessages) {
-        queryClient.setQueryData(['messages', selectedConversation], context.previousMessages);
-      }
-      setSendingMessage(false);
-    },
-  });
-
-  const deleteMessageMutation = useMutation({
-    mutationFn: ({ conversationId, messageId }: { conversationId: string; messageId: string }) => 
-      messagesAPI.deleteMessage(conversationId, messageId),
-    onSuccess: () => {
-      console.log('🗑️ Message deleted successfully, invalidating queries...');
-      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard data
-      setDeleteDialogOpen(false);
-    },
-    onError: (error) => {
-      console.error('Failed to delete message:', error);
-    },
-  });
-
-  const deleteConversationMutation = useMutation({
-    mutationFn: (conversationId: string) => messagesAPI.deleteConversation(conversationId),
-    onSuccess: () => {
-      console.log('🗑️ Conversation deleted successfully, invalidating queries...');
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] }); // Invalidate dashboard data
-      setSelectedConversation(null);
-      setDeleteDialogOpen(false);
-    },
-    onError: (error) => {
-      console.error('Failed to delete conversation:', error);
-    },
-  });
-
-  const messages: MessagesResponse | undefined = messagesResponse?.data?.data;
-
-  // Helper function to get current conversation data
-  const getCurrentConversation = () => {
-    if (!selectedConversation) return null;
+  // Get seller data from conversations list if available
+  const sellerData = React.useMemo(() => {
+    if (!conversations?.data?.data?.conversations || !sellerId) return null;
     
-    // First try to find in conversations list
-    const conversationFromList = conversations?.conversations?.find((c: Conversation) => c.id === selectedConversation);
-    if (conversationFromList) {
-      return conversationFromList;
+    // Find seller info from existing conversations
+    const conversation = conversations.data.data.conversations.find((conv: any) => 
+      conv.sellerId === sellerId || conv.buyerId === sellerId
+    );
+    
+    if (conversation) {
+      return {
+        data: {
+          data: {
+            companyName: conversation.sellerId === sellerId 
+              ? conversation.sellerAlias 
+              : conversation.buyerAlias,
+            profileImageUrl: conversation.sellerId === sellerId 
+              ? conversation.seller?.profileImageUrl 
+              : conversation.buyer?.profileImageUrl
+          }
+        }
+      };
     }
     
-    // Fallback to individual conversation data
-    return individualConversationResponse?.data?.data || null;
+    return null;
+  }, [conversations, sellerId]);
+
+  // Mutations
+  const sendMessageMutation = useMutation({
+    mutationFn: (data: { conversationId: string; content: string }) => 
+      messagesAPI.sendMessage(data.conversationId, { content: data.content }),
+    onSuccess: () => {
+      setNewMessage('');
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      
+      // Scroll to bottom after sending message
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+        }
+      }, 100);
+    },
+    onError: (error: any) => {
+      console.error('Send message error:', error);
+      const errorMessage = error.response?.data?.error || error.message;
+      
+      if (errorMessage.includes('closed conversation')) {
+        showWarning('This conversation is closed. You cannot send messages.');
+      } else {
+        showError('Failed to send message');
+      }
+    },
+  });
+
+  // NEW: Mutation for sending message with automatic conversation creation
+  const sendMessageWithConversationMutation = useMutation({
+    mutationFn: (data: { productId: string; receiverId: string; content: string }) => 
+      messagesAPI.sendMessageWithConversation(data),
+    onSuccess: (response) => {
+      setNewMessage('');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      
+      // Extract conversation ID from response and navigate to it
+      const conversationId = response.data?.data?.conversationId;
+      if (conversationId) {
+        setSelectedConversation(conversationId);
+        navigate(`/messages?conversation=${conversationId}`, { replace: true });
+      }
+      
+      showSuccess('Message sent successfully!');
+    },
+    onError: (error: any) => {
+      console.error('Send message with conversation error:', error);
+      const errorMessage = error.response?.data?.error || error.message;
+      showError(`Failed to send message: ${errorMessage}`);
+    },
+  });
+
+  const closeConversationMutation = useMutation({
+    mutationFn: (conversationId: string) => {
+      console.log('🔒 Attempting to close conversation:', conversationId);
+      return messagesAPI.closeConversation(conversationId);
+    },
+    onSuccess: (data) => {
+      console.log('✅ Conversation closed successfully:', data);
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setCloseConfirmOpen(false);
+      showSuccess('Conversation closed successfully');
+    },
+    onError: (error: any) => {
+      console.error('❌ Close conversation error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        statusText: error.response?.statusText
+      });
+      showError('Failed to close conversation');
+    },
+  });
+
+  const markConversationAsReadMutation = useMutation({
+    mutationFn: (conversationId: string) => {
+      console.log('📖 Marking conversation as read:', conversationId);
+      return messagesAPI.markConversationAsRead(conversationId);
+    },
+    onSuccess: () => {
+      console.log('✅ Conversation marked as read successfully');
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+      queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+    },
+    onError: (error: any) => {
+      console.error('❌ Mark conversation as read error:', error);
+      // Don't show error to user as this is a background operation
+    },
+  });
+
+  // Archive functionality not implemented in API yet
+  // const archiveConversationMutation = useMutation({
+  //   mutationFn: (conversationId: string) => messagesAPI.archiveConversation(conversationId),
+  //   onSuccess: () => {
+  //     queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  //     setArchiveConfirmOpen(false);
+  //     showSuccess('Conversation archived successfully');
+  //   },
+  //   onError: (error: any) => {
+  //     console.error('Archive conversation error:', error);
+  //     showError('Failed to archive conversation');
+  //   },
+  // });
+
+  // Set selected conversation from URL params
+  useEffect(() => {
+    if (conversationId && conversationId !== selectedConversation) {
+      setSelectedConversation(conversationId);
+      // Mark conversation as read when opened from URL
+      markConversationAsReadMutation.mutate(conversationId);
+      // Mark message notifications as read for this conversation
+      markMessageNotificationsAsRead(conversationId);
+    }
+  }, [conversationId, selectedConversation]);
+
+  // Socket connection status handling
+  useEffect(() => {
+    if (socket && !isConnected) {
+      showWarning('Socket connection lost. Messages may not appear in real-time.');
+    }
+  }, [socket, isConnected, showWarning]);
+
+  // Join/leave conversation rooms when conversation changes
+  useEffect(() => {
+    if (socket && isConnected && selectedConversation) {
+      socket.emit('join_conversation', selectedConversation);
+      
+      return () => {
+        socket.emit('leave_conversation', selectedConversation);
+      };
+    }
+  }, [socket, isConnected, selectedConversation]);
+
+  // Socket event handlers
+  useEffect(() => {
+    if (socket && isConnected) {
+      const handleNewMessage = (message: any) => {
+        // If this message is for the currently selected conversation, refresh messages
+        if (message.conversationId === selectedConversation) {
+          queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+        }
+        
+        // Always refresh conversations list to update last message preview
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+        
+        // Note: Notifications are handled by NotificationContext and MessageNotification components
+        // No need to show additional notifications here to avoid duplicates
+      };
+
+      const handleMessageNotification = (data: any) => {
+        // Refresh conversations list to show unread count
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+        
+        // Note: Notifications are handled by NotificationContext and MessageNotification components
+        // No need to show additional notifications here to avoid duplicates
+      };
+
+      const handleMessageDeleted = (data: any) => {
+        if (data.conversationId === selectedConversation) {
+          queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+        }
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      };
+
+      const handleConversationClosed = (data: any) => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        showSuccess('Conversation was closed');
+      };
+
+      const handleConversationCreated = (conversation: any) => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        showSuccess('New conversation started');
+      };
+
+      // Listen to socket events
+      socket.on('message_received', handleNewMessage);
+      socket.on('new_message_notification', handleMessageNotification);
+      socket.on('message_deleted', handleMessageDeleted);
+      socket.on('conversation_closed', handleConversationClosed);
+      socket.on('conversation_created', handleConversationCreated);
+
+      return () => {
+        socket.off('message_received', handleNewMessage);
+        socket.off('new_message_notification', handleMessageNotification);
+        socket.off('message_deleted', handleMessageDeleted);
+        socket.off('conversation_closed', handleConversationClosed);
+        socket.off('conversation_created', handleConversationCreated);
+      };
+    }
+  }, [socket, isConnected, selectedConversation, queryClient, state.user?.id, showSuccess, showWarning, navigate]);
+
+  // Auto-scroll to bottom when new messages arrive or when sending a message
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
+    }
+  }, [messages, sendMessageMutation.isSuccess]);
+
+  // Event handlers
+  const handleConversationSelect = (conversationId: string) => {
+    setSelectedConversation(conversationId);
+    navigate(`/messages?conversation=${conversationId}`, { replace: true });
+    
+    // Mark conversation as read when opened
+    markConversationAsReadMutation.mutate(conversationId);
+    
+    // Mark message notifications as read for this conversation
+    markMessageNotificationsAsRead(conversationId);
   };
 
-  const currentConversation = getCurrentConversation();
-
-
-  // Handle URL parameters to auto-select conversation
-  useEffect(() => {
-    const conversationId = searchParams.get('conversation');
+  const handleSendMessage = () => {
+    if (!newMessage.trim()) return;
     
-    if (conversationId) {
-      // Always set the conversation ID from URL, regardless of whether conversations are loaded
-      setSelectedConversation(conversationId);
-    }
-  }, [searchParams]);
-
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedConversation || sendingMessage) {
+    // If we have product and seller info but no conversation, create new conversation
+    if (productId && sellerId && !selectedConversation) {
+      sendMessageWithConversationMutation.mutate({
+        productId,
+        receiverId: sellerId,
+        content: newMessage.trim(),
+      });
       return;
     }
-
-    setSendingMessage(true);
-    try {
-      await sendMessageMutation.mutateAsync({
-        content: messageText.trim(),
-        type: 'TEXT'
+    
+    // If we have an existing conversation, send message to it
+    if (selectedConversation) {
+      // Check if conversation is closed
+      if (currentConversation?.status === 'CLOSED') {
+        showWarning('This conversation is closed. You cannot send messages.');
+        return;
+      }
+      
+      sendMessageMutation.mutate({
+        conversationId: selectedConversation,
+        content: newMessage.trim(),
       });
-    } catch (error) {
-      console.error('Error sending message:', error);
+      return;
     }
+    
+    // No conversation and no product/seller info
+    showError('Unable to send message. Please select a conversation or contact a seller.');
   };
 
   const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -235,492 +403,942 @@ const MessagesPage: React.FC = () => {
     }
   };
 
-  const handleDeleteMessage = (messageId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setDeleteType('message');
-    setDeleteTargetId(messageId);
-    setDeleteDialogOpen(true);
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, conversationId: string) => {
+    console.log('🔒 Menu opened for conversation:', conversationId);
+    setAnchorEl(event.currentTarget);
+    setSelectedConversationId(conversationId);
   };
 
-  const handleDeleteConversation = (conversationId: string, event: React.MouseEvent) => {
-    event.stopPropagation();
-    setDeleteType('conversation');
-    setDeleteTargetId(conversationId);
-    setDeleteDialogOpen(true);
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedConversationId(null);
   };
 
-  const confirmDelete = () => {
-    if (!deleteTargetId || !deleteType) return;
-
-    if (deleteType === 'message' && selectedConversation) {
-      deleteMessageMutation.mutate({ conversationId: selectedConversation, messageId: deleteTargetId });
-    } else if (deleteType === 'conversation') {
-      deleteConversationMutation.mutate(deleteTargetId);
+  const handleCloseConversation = () => {
+    console.log('🔒 HandleCloseConversation called with selectedConversationId:', selectedConversationId);
+    if (selectedConversationId) {
+      console.log('🔒 Opening close confirmation dialog...');
+      setCloseConfirmOpen(true);
+    } else {
+      console.error('❌ No selectedConversationId found in handleCloseConversation!');
     }
   };
 
-  const cancelDelete = () => {
-    setDeleteDialogOpen(false);
-    setDeleteType(null);
-    setDeleteTargetId(null);
+  // const handleArchiveConversation = () => {
+  //   if (selectedConversationId) {
+  //     setArchiveConfirmOpen(true);
+  //   }
+  // };
+
+  const handleConfirmClose = () => {
+    console.log('🔒 HandleConfirmClose called with selectedConversationId:', selectedConversationId);
+    if (selectedConversationId) {
+      console.log('🔒 Calling closeConversationMutation.mutate...');
+      closeConversationMutation.mutate(selectedConversationId);
+    } else {
+      console.error('❌ No selectedConversationId found!');
+    }
   };
 
+  // const handleConfirmArchive = () => {
+  //   if (selectedConversationId) {
+  //     archiveConversationMutation.mutate(selectedConversationId);
+  //   }
+  // };
+
+  // Filter conversations
+  const filteredConversations = React.useMemo(() => {
+    if (!conversations?.data?.data?.conversations) return [];
+    
+    let filtered = conversations.data.data.conversations;
+    
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter((conv: Conversation) => 
+        conv.product?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        conv.buyer?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        conv.seller?.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Filter by status
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter((conv: Conversation) => conv.status === filterStatus);
+    }
+    
+    return filtered;
+  }, [conversations, searchTerm, filterStatus]);
+
+  // Get current conversation data
+  const currentConversation = React.useMemo(() => {
+    if (!conversations?.data?.data?.conversations || !selectedConversation) return null;
+    return conversations.data.data.conversations.find((conv: Conversation) => conv.id === selectedConversation);
+  }, [conversations, selectedConversation]);
+
+  // Helper functions
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diff = now.getTime() - date.getTime();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
     
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return date.toLocaleDateString();
-  };
-
-  const getListingTypeIcon = (type: string) => {
-    switch (type) {
-      case 'FIXED_PRICE':
-        return <ShoppingCart />;
-      case 'AUCTION':
-        return <Gavel />;
-      case 'NEGOTIABLE':
-        return <AttachMoney />;
-      default:
-        return <ShoppingCart />;
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffInHours < 168) { // 7 days
+      return date.toLocaleDateString([], { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
   };
 
-  const getListingTypeColor = (type: string) => {
-    switch (type) {
-      case 'FIXED_PRICE':
-        return 'success';
-      case 'AUCTION':
-        return 'secondary';
-      case 'NEGOTIABLE':
-        return 'warning';
-      default:
-        return 'default';
-    }
+  const getUnreadCount = (conversation: Conversation) => {
+    // Use the unreadCount field from backend if available, otherwise fallback to 0
+    return conversation.unreadCount || 0;
   };
 
-  if (error) {
+  const getOtherUser = (conversation: Conversation) => {
+    if (!state.user) return null;
+    return state.user.id === conversation.buyerId ? conversation.seller : conversation.buyer;
+  };
+
+  const getOtherUserAlias = (conversation: Conversation) => {
+    if (!state.user) return '';
+    return state.user.id === conversation.buyerId ? conversation.sellerAlias : conversation.buyerAlias;
+  };
+
+
+  // Loading state
+  if (conversationsLoading) {
     return (
       <Box>
-        <Alert severity="error">
-          Failed to load conversations. Please try again later.
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Skeleton variant="text" height={32} />
+                <Skeleton variant="text" height={24} />
+                <Skeleton variant="rectangular" height={200} />
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardContent>
+                <Skeleton variant="rectangular" height={400} />
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  // Error state
+  if (conversationsError) {
+    return (
+      <Box>
+        <Alert 
+          severity="error" 
+          sx={{ mb: 3 }}
+          action={
+            <Button color="inherit" size="small" onClick={() => refetchConversations()}>
+              Retry
+            </Button>
+          }
+        >
+          Failed to load conversations. Please try again.
         </Alert>
       </Box>
     );
   }
 
   return (
-    <Box>
+    <Box sx={{ 
+      minHeight: '100vh', 
+      background: 'linear-gradient(135deg, #0A0A0A 0%, #111111 100%)',
+      color: 'white'
+    }}>
       {/* Header */}
       <PageHeader
         title="Messages"
-        subtitle="Communicate with buyers and sellers anonymously"
+        subtitle="Communicate with buyers and sellers"
       />
 
-      <Grid container spacing={3}>
-        {/* Conversations List */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <TextField
-                fullWidth
-                placeholder="Search conversations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ mb: 2 }}
-              />
-              
-              {isLoading ? (
-                <List>
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <ListItem key={index}>
-                      <ListItemAvatar>
-                        <Skeleton variant="circular" width={40} height={40} />
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={<Skeleton variant="text" width="80%" />}
-                        secondary={<Skeleton variant="text" width="60%" />}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <List>
-                  {(conversations?.conversations || [])
-                    .filter((conv: Conversation) => {
-                      // Only show conversations that have actual messages
-                      const hasMessages = conv._count?.messages && conv._count.messages > 0;
-                      
-                      // Apply search filter
-                      const matchesSearch = 
-                        conv.product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        conv.buyer?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                        conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
-                      
-                      return hasMessages && matchesSearch;
-                    })
-                    .length > 0 ? (
-                    (conversations?.conversations || [])
-                      .filter((conv: Conversation) => {
-                        // Only show conversations that have actual messages
-                        const hasMessages = conv._count?.messages && conv._count.messages > 0;
+
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <Grid container spacing={3} sx={{ height: 'calc(100vh - 200px)' }}>
+          {/* Conversations List */}
+          <Grid item xs={12} md={4}>
+            <LiquidGlassCard 
+              variant="default"
+              hoverEffect={false}
+              glassIntensity="medium"
+              borderGlow={true}
+              customSx={{
+                height: '600px',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <CardContent sx={{ p: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* Search and Filter */}
+                <Box sx={{ p: 3, borderBottom: '1px solid rgba(99, 102, 241, 0.1)' }}>
+                <TextField
+                  fullWidth
+                  placeholder="Search conversations..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    size="small"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                          <Search sx={{ color: 'rgba(255, 255, 255, 0.6)' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        color: 'white',
+                        '& fieldset': {
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
+                        },
+                        '&:hover fieldset': {
+                          borderColor: 'rgba(99, 102, 241, 0.5)',
+                        },
+                        '&.Mui-focused fieldset': {
+                          borderColor: '#6366f1',
+                        },
+                      },
+                      '& .MuiInputLabel-root': {
+                        color: 'rgba(255, 255, 255, 0.6)',
+                        '&.Mui-focused': {
+                          color: '#6366f1',
+                        },
+                      },
+                    }}
+                  />
+                  
+                  <FormControl fullWidth size="small" sx={{ mt: 2 }}>
+                    <InputLabel sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>Status</InputLabel>
+                    <Select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      label="Status"
+                      sx={{
+                        color: 'white',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
+                        },
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'rgba(99, 102, 241, 0.5)',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#6366f1',
+                        },
+                      }}
+                    >
+                      <MenuItem value="all">All Conversations</MenuItem>
+                      <MenuItem value="ACTIVE">Active</MenuItem>
+                      <MenuItem value="ARCHIVED">Archived</MenuItem>
+                      <MenuItem value="CLOSED">Closed</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                {/* Conversations List */}
+                <Box sx={{ flex: 1, overflow: 'auto' }}>
+                  {filteredConversations.length > 0 ? (
+                    <List sx={{ p: 0 }}>
+                      {filteredConversations.map((conversation: Conversation) => {
+                        const otherUser = getOtherUser(conversation);
+                        const otherUserAlias = getOtherUserAlias(conversation);
+                        const unreadCount = getUnreadCount(conversation);
+                        const isSelected = selectedConversation === conversation.id;
                         
-                        // Apply search filter
-                        const matchesSearch = 
-                          conv.product?.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          conv.buyer?.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          conv.seller?.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
-                        
-                        return hasMessages && matchesSearch;
-                      })
-                      .map((conversation: Conversation) => (
-                        <React.Fragment key={conversation.id}>
-                          <ListItem
-                            button
-                            selected={selectedConversation === conversation.id}
-                            onClick={() => setSelectedConversation(conversation.id)}
-                            sx={{
-                              '&:hover .conversation-delete-button': {
-                                opacity: 1,
-                              },
-                            }}
+                        return (
+                          <motion.div
+                            key={conversation.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
                           >
-                            <ListItemAvatar>
-                              <Badge
-                                badgeContent={conversation._count?.messages || 0}
-                                color="primary"
-                                invisible={(conversation._count?.messages || 0) === 0}
-                              >
-                                <Avatar>
-                                  <Business />
-                                </Avatar>
-                              </Badge>
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={
-                                <Box display="flex" alignItems="center" gap={1}>
-                                  <Typography variant="subtitle1" noWrap>
-                                    {conversation.product?.title || 'Unknown Product'}
-                                  </Typography>
-                                  <Chip
-                                    icon={getListingTypeIcon(conversation.product?.listingType || 'FIXED_PRICE')}
-                                    label={conversation.product?.listingType?.replace('_', ' ') || 'Unknown'}
-                                    size="small"
-                                    color={getListingTypeColor(conversation.product?.listingType || 'FIXED_PRICE')}
-                                  />
-                                </Box>
-                              }
-                              secondary={
-                                <Box>
-                                  <Typography variant="body2" color="text.secondary" noWrap>
-                                    {conversation.messages?.[0]?.content || 'No messages yet'}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {conversation.messages?.[0]?.createdAt
-                                      ? formatTime(conversation.messages[0].createdAt)
-                                      : formatTime(conversation.updatedAt)}
-                                  </Typography>
-                                </Box>
-                              }
-                            />
-                            <Box
-                              className="conversation-delete-button"
+                            <ListItem
+                              button
+                              onClick={() => handleConversationSelect(conversation.id)}
                               sx={{
-                                opacity: 0,
-                                transition: 'opacity 0.2s',
-                                position: 'absolute',
-                                right: 8,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
+                                borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+                                backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                                '&:hover': {
+                                  backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(99, 102, 241, 0.05)',
+                                },
+                                position: 'relative',
                               }}
                             >
-                              <Tooltip title="Delete conversation">
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={(e) => handleDeleteConversation(conversation.id, e)}
+                              <ListItemAvatar>
+                                <Badge
+                                  overlap="circular"
+                                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                                  badgeContent={
+                                    unreadCount > 0 ? (
+                                      <Chip
+                                        label={unreadCount}
+                                        size="small"
+                                        sx={{
+                                          backgroundColor: '#6366f1',
+                                          color: 'white',
+                                          fontSize: '0.75rem',
+                                          height: 20,
+                                          minWidth: 20,
+                                        }}
+                                      />
+                                    ) : null
+                                  }
                                 >
-                                  <Delete sx={{ fontSize: 16 }} />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </ListItem>
-                          <Divider />
-                        </React.Fragment>
-                      ))
-                  ) : (
-                    <Box textAlign="center" py={4}>
-                      <Message sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                      <Typography variant="h6" gutterBottom>
-                        No conversations found
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {searchQuery ? 'No conversations match your search.' : 'Start a conversation by viewing a product.'}
-                      </Typography>
-                    </Box>
-                  )}
-                </List>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Messages */}
-        <Grid item xs={12} md={8}>
-          {selectedConversation ? (
-            <Card sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
-              {/* Conversation Header */}
-              <CardContent sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Box display="flex" alignItems="center" justifyContent="space-between">
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Avatar>
-                      <Business />
-                    </Avatar>
-                    <Box>
-                      <Typography variant="h6">
-                        {currentConversation?.product?.title || 'Conversation'}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {currentConversation?.buyer?.companyName || 'Buyer'} • {' '}
-                        {currentConversation?.seller?.companyName || 'Seller'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  
-                  {/* Actions */}
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <Chip
-                      icon={<Lock />}
-                      label="End-to-End Encrypted"
-                      color="success"
-                      size="small"
-                      variant="outlined"
-                    />
-                    <Tooltip title="Delete conversation">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={(e) => handleDeleteConversation(selectedConversation!, e)}
-                      >
-                        <Delete />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </Box>
-              </CardContent>
-
-              {/* Messages List */}
-              <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-                {messagesLoading ? (
-                  <Box>
-                    {Array.from({ length: 3 }).map((_, index) => (
-                      <Box key={index} display="flex" gap={2} mb={2}>
-                        <Skeleton variant="circular" width={32} height={32} />
-                        <Box flex={1}>
-                          <Skeleton variant="text" width="60%" />
-                          <Skeleton variant="text" width="40%" />
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                ) : (
-                  <Box>
-                    {(messages?.messages || []).length > 0 ? (
-                      (messages?.messages || []).map((message: MessageType) => (
-                        <Box
-                          key={message.id}
-                          display="flex"
-                          gap={2}
-                          mb={2}
-                          justifyContent={message.sender?.id === state.user?.id ? 'flex-end' : 'flex-start'}
-                        >
-                          {message.sender?.id !== state.user?.id && (
-                            <Avatar 
-                              sx={{ width: 32, height: 32 }}
-                              src={message.sender?.profileImageUrl}
-                              alt={message.sender?.contactPerson || message.sender?.companyName || message.sender?.email || 'User'}
-                            >
-                              <Person />
-                            </Avatar>
-                          )}
-                          <Box
-                            sx={{
-                              maxWidth: '70%',
-                              p: 2,
-                              borderRadius: 2,
-                              bgcolor: message.sender?.id === state.user?.id ? 'primary.main' : 'grey.100',
-                              color: message.sender?.id === state.user?.id ? 'white' : 'text.primary',
-                              position: 'relative',
-                              '&:hover .delete-button': {
-                                opacity: 1,
-                              },
-                            }}
-                          >
-                            <Typography variant="body1">
-                              {message.content}
-                            </Typography>
-                            <Box display="flex" alignItems="center" justifyContent="space-between" mt={1}>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                }}
-                              >
-                                {formatTime(message.createdAt)}
-                              </Typography>
-                              <Box display="flex" alignItems="center" gap={0.5}>
-                                {message.isEncrypted && (
-                                  <>
-                                    <Lock sx={{ fontSize: 12, color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary' }} />
-                                    <Typography variant="caption" sx={{ color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary' }}>
-                                      E2E
-                                    </Typography>
-                                  </>
-                                )}
-                                <Tooltip title="Delete message">
-                                  <IconButton
-                                    className="delete-button"
-                                    size="small"
+                                  <Avatar
+                                    src={getImageUrl(otherUser?.profileImageUrl, 'avatar')}
+                                    alt={otherUserAlias}
                                     sx={{
-                                      opacity: 0,
-                                      transition: 'opacity 0.2s',
-                                      color: message.sender?.id === state.user?.id ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-                                      '&:hover': {
-                                        color: message.sender?.id === state.user?.id ? 'white' : 'error.main',
-                                      },
+                                      width: 48,
+                                      height: 48,
+                                      border: '2px solid rgba(99, 102, 241, 0.2)',
                                     }}
-                                    onClick={(e) => handleDeleteMessage(message.id, e)}
                                   >
-                                    <Delete sx={{ fontSize: 14 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </Box>
-                          </Box>
-                          {message.sender?.id === state.user?.id && (
-                            <Avatar 
-                              sx={{ width: 32, height: 32 }}
-                              src={state.user?.profileImageUrl}
-                              alt={state.user?.contactPerson || state.user?.companyName || state.user?.email}
-                            >
-                              <Person />
-                            </Avatar>
-                          )}
-                        </Box>
-                      ))
-                    ) : (
-                      <Box textAlign="center" py={4}>
-                        <Message sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                        <Typography variant="h6" gutterBottom>
-                          No messages yet
+                                    {otherUser?.companyName?.charAt(0) || 'U'}
+                                  </Avatar>
+                                </Badge>
+                              </ListItemAvatar>
+                              
+                              <ListItemText
+                                primary={
+                                  <Box display="flex" alignItems="center" gap={1}>
+                                    <Typography
+                                      variant="subtitle1"
+                                      noWrap
+                                      sx={{
+                                        color: 'white',
+                                        fontWeight: isSelected ? 600 : 500,
+                                        flex: 1,
+                                      }}
+                                    >
+                                      {otherUser?.companyName || 'Unknown Company'}
+                                    </Typography>
+                                    <Chip
+                                      label={conversation.status}
+                                      size="small"
+                                      sx={{
+                                        fontSize: '0.7rem',
+                                        height: 20,
+                                        minWidth: 'auto',
+                                        backgroundColor: 
+                                          conversation.status === 'ACTIVE' ? 'rgba(34, 197, 94, 0.2)' :
+                                          conversation.status === 'ARCHIVED' ? 'rgba(156, 163, 175, 0.2)' :
+                                          conversation.status === 'CLOSED' ? 'rgba(239, 68, 68, 0.2)' :
+                                          'rgba(156, 163, 175, 0.2)',
+                                        color: 
+                                          conversation.status === 'ACTIVE' ? '#22c55e' :
+                                          conversation.status === 'ARCHIVED' ? '#9ca3af' :
+                                          conversation.status === 'CLOSED' ? '#ef4444' :
+                                          '#9ca3af',
+                                        border: 
+                                          conversation.status === 'ACTIVE' ? '1px solid rgba(34, 197, 94, 0.3)' :
+                                          conversation.status === 'ARCHIVED' ? '1px solid rgba(156, 163, 175, 0.3)' :
+                                          conversation.status === 'CLOSED' ? '1px solid rgba(239, 68, 68, 0.3)' :
+                                          '1px solid rgba(156, 163, 175, 0.3)',
+                                        '& .MuiChip-label': {
+                                          px: 1,
+                                        },
+                                      }}
+                                    />
+                                  </Box>
+                                }
+                                secondary={
+                                  <Box>
+                                    <Typography
+                                      variant="body2"
+                                      noWrap
+                                      sx={{
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        mb: 0.5,
+                                      }}
+                                    >
+                          {conversation.product?.title || 'Unknown Product'}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Start the conversation by sending your first message.
+                                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                                      <Typography
+                                        variant="caption"
+                                        noWrap
+                                        sx={{
+                                          color: 'rgba(255, 255, 255, 0.6)',
+                                          flex: 1,
+                                        }}
+                                      >
+                                        {conversation.messages?.[0]?.content?.substring(0, 50) || 'No messages yet'}...
+                                    </Typography>
+                                      <Typography
+                                        variant="caption"
+                                sx={{
+                                          color: 'rgba(255, 255, 255, 0.5)',
+                                          ml: 1,
+                                        }}
+                                      >
+                                        {conversation.messages?.[0] ? formatTime(conversation.messages[0].createdAt) : ''}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                }
+                              />
+                              
+                                  <IconButton
+                                    size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMenuOpen(e, conversation.id);
+                                }}
+                                sx={{ color: 'rgba(255, 255, 255, 0.6)' }}
+                              >
+                                <MoreVert />
+                                  </IconButton>
+                            </ListItem>
+                          </motion.div>
+                        );
+                      })}
+                    </List>
+                  ) : (
+                    <Box textAlign="center" py={8}>
+                      <Message sx={{ fontSize: 64, color: 'rgba(255, 255, 255, 0.3)', mb: 2 }} />
+                      <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 1 }}>
+                          No conversations found
+                        </Typography>
+                      <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                        {searchTerm || filterStatus !== 'all' 
+                          ? 'Try adjusting your search or filter criteria.'
+                          : 'Start a conversation by contacting a seller from a product page.'
+                        }
                         </Typography>
                       </Box>
                     )}
+                </Box>
+              </CardContent>
+            </LiquidGlassCard>
+          </Grid>
+
+          {/* Messages Area */}
+          <Grid item xs={12} md={8}>
+            {(selectedConversation && currentConversation) || (productId && sellerId) ? (
+              <LiquidGlassCard 
+                variant="default"
+                hoverEffect={false}
+                glassIntensity="medium"
+                borderGlow={true}
+                customSx={{
+                  height: '600px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <CardContent sx={{ p: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* Conversation Header */}
+                  <Box sx={{ 
+                    p: 3, 
+                    borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Avatar
+                        src={getImageUrl(
+                          currentConversation 
+                            ? getOtherUser(currentConversation)?.profileImageUrl 
+                            : sellerData?.data?.data?.profileImageUrl, 
+                          'avatar'
+                        )}
+                        alt={currentConversation 
+                          ? getOtherUserAlias(currentConversation) 
+                          : sellerData?.data?.data?.companyName || 'Seller'
+                        }
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          border: '2px solid rgba(99, 102, 241, 0.2)',
+                        }}
+                      >
+                        {currentConversation 
+                          ? getOtherUser(currentConversation)?.companyName?.charAt(0) || 'U'
+                          : sellerData?.data?.data?.companyName?.charAt(0) || 'S'
+                        }
+                      </Avatar>
+                      <Box>
+                        <Typography variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
+                          {currentConversation 
+                            ? getOtherUser(currentConversation)?.companyName || 'Unknown Company'
+                            : sellerData?.data?.data?.companyName || 'Seller'
+                          }
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                          {currentConversation 
+                            ? currentConversation.product?.title || 'Unknown Product'
+                            : productData?.data?.data?.title || 'Loading product...'
+                          }
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    <Box display="flex" alignItems="center" gap={1}>
+                      {currentConversation && (
+                        <>
+                          <Chip
+                            label={currentConversation.status}
+                            size="small"
+                            color={currentConversation.status === 'ACTIVE' ? 'success' : 'default'}
+                            sx={{
+                              backgroundColor: currentConversation.status === 'ACTIVE' 
+                                ? 'rgba(34, 197, 94, 0.1)' 
+                                : 'rgba(255, 255, 255, 0.1)',
+                              color: currentConversation.status === 'ACTIVE' ? '#22c55e' : 'rgba(255, 255, 255, 0.7)',
+                              border: '1px solid rgba(255, 255, 255, 0.1)',
+                            }}
+                          />
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => navigate(`/products/${currentConversation.product?.id}`)}
+                            startIcon={<Visibility />}
+                            sx={{
+                              borderColor: 'rgba(99, 102, 241, 0.4)',
+                          color: '#6366f1',
+                          '&:hover': {
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                          },
+                        }}
+                      >
+                        View Product
+                      </Button>
+                        </>
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* Messages */}
+                  <Box 
+                    ref={messagesEndRef}
+                    sx={{ 
+                      flex: 1, 
+                      overflow: 'auto', 
+                      p: 2,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1,
+                    }}
+                  >
+                  {!currentConversation && productId && sellerId ? (
+                    // New conversation composition mode
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      height: '100%',
+                      flexDirection: 'column',
+                      gap: 3,
+                      p: 4
+                    }}>
+                      <Box sx={{ textAlign: 'center', mb: 2 }}>
+                        <Typography variant="h5" sx={{ color: 'rgba(255, 255, 255, 0.9)', mb: 1 }}>
+                          Start a conversation with {sellerData?.data?.data?.companyName || 'the seller'}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 2 }}>
+                          Type your message below and press Enter to send
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ) : messagesLoading ? (
+                    <Box>
+                        {Array.from({ length: 5 }).map((_, index) => (
+                        <Box key={index} display="flex" gap={2} mb={2}>
+                            <Skeleton variant="circular" width={40} height={40} />
+                          <Box flex={1}>
+                              <Skeleton variant="text" height={20} width="60%" />
+                              <Skeleton variant="text" height={16} width="40%" />
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                    ) : messagesError ? (
+                      <Alert severity="error">
+                        Failed to load messages. Please try again.
+                      </Alert>
+                    ) : messages?.data?.data?.messages && messages.data.data.messages.length > 0 ? (
+                      messages.data.data.messages.map((message: MessageType) => {
+                        const isOwnMessage = message.senderId === state.user?.id;
+                        
+                        return (
+                          <motion.div
+                            key={message.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                          >
+                            <Box
+                            display="flex"
+                              justifyContent={isOwnMessage ? 'flex-end' : 'flex-start'}
+                              mb={1}
+                            >
+                            <Box
+                              sx={{
+                                maxWidth: '70%',
+                                p: 2,
+                                  borderRadius: 3,
+                                  backgroundColor: isOwnMessage 
+                                    ? 'rgba(99, 102, 241, 0.2)' 
+                                    : 'rgba(255, 255, 255, 0.05)',
+                                  border: isOwnMessage 
+                                    ? '1px solid rgba(99, 102, 241, 0.3)' 
+                                    : '1px solid rgba(255, 255, 255, 0.1)',
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: 'white',
+                                    wordBreak: 'break-word',
+                                  }}
+                                >
+                                {message.content}
+                              </Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: 'rgba(255, 255, 255, 0.5)',
+                                    display: 'block',
+                                    textAlign: isOwnMessage ? 'right' : 'left',
+                                    mt: 0.5,
+                                  }}
+                                >
+                                  {formatTime(message.createdAt)}
+                                  {isOwnMessage && message.readAt && ' • Read'}
+                                </Typography>
+                                  </Box>
+                              </Box>
+                          </motion.div>
+                        );
+                      })
+                    ) : (
+                      <Box textAlign="center" py={8}>
+                        <Message sx={{ fontSize: 64, color: 'rgba(255, 255, 255, 0.3)', mb: 2 }} />
+                        <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 1 }}>
+                            No messages yet
+                          </Typography>
+                        <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+                          Start the conversation by sending a message below.
+                          </Typography>
+                        </Box>
+                      )}
+                </Box>
+
+                {/* Conversation Closed Notice */}
+                {currentConversation?.status === 'CLOSED' && (
+                  <Box sx={{ 
+                    p: 2, 
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderLeft: '4px solid #ef4444',
+                  }}>
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Block sx={{ color: '#ef4444', fontSize: 20 }} />
+                      <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 500 }}>
+                        This conversation has been closed. No new messages can be sent.
+                      </Typography>
+                    </Box>
                   </Box>
                 )}
-              </Box>
 
-              {/* Message Input */}
-              <Box sx={{ borderTop: 1, borderColor: 'divider', p: 2 }}>
-                <Box display="flex" gap={1}>
-                  <TextField
-                    fullWidth
-                    placeholder="Type your message..."
-                    variant="outlined"
-                    size="small"
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    disabled={sendingMessage}
-                    multiline
-                    maxRows={3}
-                  />
-                  <Button 
-                    variant="outlined" 
-                    size="small"
-                    disabled={sendingMessage}
-                  >
-                    <AttachFile />
-                  </Button>
-                  <Button 
-                    variant="outlined" 
-                    size="small"
-                    disabled={sendingMessage}
-                  >
-                    <Image />
-                  </Button>
-                  <Button 
-                    variant="contained" 
-                    size="small"
-                    onClick={handleSendMessage}
-                    disabled={!messageText.trim() || sendingMessage}
-                  >
-                    {sendingMessage ? 'Sending...' : <Send />}
-                  </Button>
+                {/* Message Input */}
+                  <Box sx={{ 
+                    p: 3, 
+                    borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+                    display: 'flex',
+                    gap: 2,
+                    alignItems: 'flex-end',
+                  }}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      maxRows={4}
+                      placeholder={
+                        currentConversation?.status === 'CLOSED' 
+                          ? "This conversation is closed" 
+                          : productId && sellerId && !selectedConversation
+                          ? "Type your message to start a new conversation..."
+                          : "Type your message..."
+                      }
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      disabled={sendMessageMutation.isPending || currentConversation?.status === 'CLOSED'}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              sx={{ color: 'rgba(255, 255, 255, 0.6)' }}
+                            >
+                              <AttachFile />
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          color: 'white',
+                          '& fieldset': {
+                            borderColor: 'rgba(255, 255, 255, 0.2)',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#6366f1',
+                          },
+                        },
+                        '& .MuiInputLabel-root': {
+                          color: 'rgba(255, 255, 255, 0.6)',
+                          '&.Mui-focused': {
+                            color: '#6366f1',
+                          },
+                        },
+                      }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleSendMessage}
+                      disabled={
+                        !newMessage.trim() || 
+                        (sendMessageMutation.isPending || sendMessageWithConversationMutation.isPending) || 
+                        currentConversation?.status === 'CLOSED'
+                      }
+                      startIcon={
+                        (sendMessageMutation.isPending || sendMessageWithConversationMutation.isPending) 
+                          ? <CircularProgress size={20} /> 
+                          : <Send />
+                      }
+                      sx={{
+                        background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
+                        '&:hover': {
+                          background: 'linear-gradient(45deg, #5b5cf6, #7c3aed)',
+                        },
+                        '&:disabled': {
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          color: 'rgba(255, 255, 255, 0.3)',
+                        },
+                      }}
+                    >
+                      {currentConversation?.status === 'CLOSED' ? 'Closed' : 
+                       sendMessageMutation.isPending ? 'Sending...' : 'Send'}
+                    </Button>
+                  </Box>
+                </CardContent>
+              </LiquidGlassCard>
+            ) : (
+              <LiquidGlassCard 
+                variant="default"
+                hoverEffect={false}
+                glassIntensity="medium"
+                borderGlow={true}
+                customSx={{
+                  height: '600px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Box textAlign="center" py={8}>
+                  {productId && sellerId ? (
+                    // New conversation composition mode
+                    <>
+                      <Message sx={{ fontSize: 120, color: 'rgba(99, 102, 241, 0.6)', mb: 3 }} />
+                      <Typography variant="h4" sx={{ color: 'rgba(255, 255, 255, 0.9)', mb: 2 }}>
+                        Start a New Conversation
+                      </Typography>
+                      <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.8)', mb: 1 }}>
+                        with {sellerData?.data?.data?.companyName || 'the seller'}
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 4 }}>
+                        {productData?.data?.data?.title || 'this product'}
+                      </Typography>
+                    </>
+                  ) : (
+                    // No conversation selected mode
+                    <>
+                      <Message sx={{ fontSize: 120, color: 'rgba(255, 255, 255, 0.3)', mb: 3 }} />
+                      <Typography variant="h4" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 2 }}>
+                        Select a conversation
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.5)', mb: 4 }}>
+                        Choose a conversation from the list to start messaging
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => navigate('/products')}
+                        startIcon={<ShoppingCart />}
+                        sx={{
+                          background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
+                          '&:hover': {
+                            background: 'linear-gradient(45deg, #5b5cf6, #7c3aed)',
+                          },
+                        }}
+                      >
+                        Browse Products
+                      </Button>
+                    </>
+                  )}
                 </Box>
-              </Box>
-            </Card>
-          ) : (
-            <Card sx={{ height: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Box textAlign="center">
-                <Message sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  Select a conversation
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Choose a conversation from the list to start messaging
-                </Typography>
-              </Box>
-            </Card>
-          )}
+              </LiquidGlassCard>
+            )}
+          </Grid>
         </Grid>
-      </Grid>
+      </Box>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={cancelDelete}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
+      {/* Conversation Actions Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            background: 'rgba(17, 17, 17, 0.9)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 2,
+          },
+        }}
       >
-        <DialogTitle id="delete-dialog-title">
-          Delete {deleteType === 'message' ? 'Message' : 'Conversation'}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="delete-dialog-description">
-            {deleteType === 'message' 
-              ? 'Are you sure you want to delete this message? This action cannot be undone.'
-              : 'Are you sure you want to delete this conversation? This will delete all messages in the conversation and cannot be undone.'
-            }
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={cancelDelete} color="primary">
+        {/* <MenuItem onClick={handleArchiveConversation}>
+          <Archive sx={{ mr: 1 }} />
+          Archive
+        </MenuItem> */}
+        {currentConversation?.status !== 'CLOSED' && (
+          <MenuItem onClick={handleCloseConversation} sx={{ color: 'warning.main' }}>
+            <Block sx={{ mr: 1 }} />
+            Close
+          </MenuItem>
+        )}
+        {currentConversation?.status === 'CLOSED' && (
+          <MenuItem disabled sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
+            <Block sx={{ mr: 1 }} />
+            Conversation Closed
+          </MenuItem>
+        )}
+      </Menu>
+
+        {/* Close Confirmation Dialog */}
+      <Dialog
+        open={closeConfirmOpen}
+        onClose={() => setCloseConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'rgba(17, 17, 17, 0.9)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: 'white', fontWeight: 600 }}>
+          Close Conversation
+          </DialogTitle>
+          <DialogContent>
+          <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+            Are you sure you want to close this conversation? The conversation will be marked as closed and moved to the closed status.
+          </Typography>
+          </DialogContent>
+          <DialogActions>
+          <Button 
+            onClick={() => setCloseConfirmOpen(false)}
+            disabled={closeConversationMutation.isPending}
+            sx={{
+              color: 'rgba(255, 255, 255, 0.8)',
+              borderColor: 'rgba(255, 255, 255, 0.3)',
+              '&:hover': {
+                borderColor: 'rgba(255, 255, 255, 0.5)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              },
+            }}
+          >
             Cancel
           </Button>
           <Button 
-            onClick={confirmDelete} 
-            color="error" 
+            onClick={handleConfirmClose}
             variant="contained"
-            disabled={deleteMessageMutation.isPending || deleteConversationMutation.isPending}
+            disabled={closeConversationMutation.isPending}
+            startIcon={closeConversationMutation.isPending ? <CircularProgress size={20} /> : <Block />}
+            sx={{
+              background: 'linear-gradient(45deg, #f59e0b, #d97706)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #d97706, #b45309)',
+              },
+            }}
           >
-            {deleteMessageMutation.isPending || deleteConversationMutation.isPending ? 'Deleting...' : 'Delete'}
+            {closeConversationMutation.isPending ? 'Closing...' : 'Close'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Archive Confirmation Dialog - Disabled for now */}
+      {/* <Dialog
+        open={archiveConfirmOpen}
+        onClose={() => setArchiveConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            background: 'rgba(17, 17, 17, 0.9)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(99, 102, 241, 0.1)',
+            borderRadius: 3,
+          },
+        }}
+      >
+        <DialogTitle sx={{ color: 'white', fontWeight: 600 }}>
+          Archive Conversation
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+            Are you sure you want to archive this conversation? You can unarchive it later.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setArchiveConfirmOpen(false)}
+            disabled={archiveConversationMutation.isPending}
+            sx={{
+              color: 'rgba(255, 255, 255, 0.8)',
+              borderColor: 'rgba(255, 255, 255, 0.3)',
+              '&:hover': {
+                borderColor: 'rgba(255, 255, 255, 0.5)',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleConfirmArchive}
+            variant="contained"
+            disabled={archiveConversationMutation.isPending}
+            startIcon={archiveConversationMutation.isPending ? <CircularProgress size={20} /> : <Archive />}
+            sx={{
+              background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #5b5cf6, #7c3aed)',
+              },
+            }}
+          >
+            {archiveConversationMutation.isPending ? 'Archiving...' : 'Archive'}
+          </Button>
+        </DialogActions>
+      </Dialog> */}
     </Box>
   );
 };

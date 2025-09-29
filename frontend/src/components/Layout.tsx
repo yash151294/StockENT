@@ -13,15 +13,12 @@ import {
   Avatar,
   Menu,
   MenuItem,
-  Badge,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
   Person,
-  Settings,
-  Notifications,
   Language,
   Logout,
   Search,
@@ -36,6 +33,7 @@ import { useConversations } from '../hooks/useConversations';
 import RoleChip from './RoleChip';
 import Logo from './Logo';
 import Footer from './Footer';
+import NotificationDropdown from './NotificationDropdown';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -104,7 +102,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { label: t('navigation.auctions'), path: '/auctions' },
     { label: t('navigation.messages'), path: '/messages', auth: true, requiresConversations: true },
     { label: t('navigation.watchlist'), path: '/watchlist', auth: true },
-    { label: t('navigation.profile'), path: '/profile', auth: true },
   ];
 
   if (state.user?.role === 'ADMIN') {
@@ -224,11 +221,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {/* Notifications */}
             {state.isAuthenticated && (
-              <IconButton color="inherit" sx={{ mr: 1 }}>
-                <Badge badgeContent={0} color="error">
-                  <Notifications />
-                </Badge>
-              </IconButton>
+              <NotificationDropdown />
             )}
 
             {/* Language Selector */}
@@ -288,12 +281,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       <Person fontSize="small" />
                     </ListItemIcon>
                     {t('navigation.profile')}
-                  </MenuItem>
-                  <MenuItem onClick={() => { navigate('/settings'); handleProfileMenuClose(); }}>
-                    <ListItemIcon>
-                      <Settings fontSize="small" />
-                    </ListItemIcon>
-                    {t('navigation.settings')}
                   </MenuItem>
                   <MenuItem onClick={handleLogout}>
                     <ListItemIcon>

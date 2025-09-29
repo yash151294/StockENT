@@ -46,6 +46,7 @@ const createApiInstance = (): AxiosInstance => {
     withCredentials: true, // Enable cookies for authentication
     headers: {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
     },
   });
 
@@ -59,15 +60,39 @@ const createApiInstance = (): AxiosInstance => {
     }
   );
 
-  // Response interceptor to handle token refresh
+  // Response interceptor to handle token refresh and rate limiting
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
 
-      // Skip token refresh for logout calls
+      // Handle rate limiting (429 status)
+      if (error.response?.status === 429) {
+        console.warn('🚫 Rate limit exceeded, implementing exponential backoff...');
+        
+        // Add exponential backoff delay
+        const retryCount = originalRequest._retryCount || 0;
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Max 30 seconds
+        
+        if (retryCount < 3) { // Max 3 retries
+          originalRequest._retryCount = retryCount + 1;
+          
+          return new Promise((resolve) => {
+            setTimeout(() => {
+              resolve(instance(originalRequest));
+            }, delay);
+          });
+        } else {
+          console.error('❌ Max retries exceeded for rate limited request');
+          return Promise.reject(new Error('Rate limit exceeded. Please try again later.'));
+        }
+      }
+
+      // Skip token refresh for logout calls and auth endpoints
       if (error.response?.status === 401 && !originalRequest._retry && 
-          !originalRequest.url?.includes('/auth/logout')) {
+          !originalRequest.url?.includes('/auth/logout') &&
+          !originalRequest.url?.includes('/auth/refresh') &&
+          !originalRequest.url?.includes('/auth/me')) {
         originalRequest._retry = true;
 
         try {
@@ -83,9 +108,20 @@ const createApiInstance = (): AxiosInstance => {
             return instance(originalRequest);
           }
         } catch (refreshError) {
-          // Refresh failed, don't redirect automatically
-          // Let the component handle the authentication state
-          logger.info('Token refresh failed, user needs to login');
+          // Refresh failed - clear authentication state
+          logger.warn('Token refresh failed, clearing authentication state');
+          
+          // Clear local storage and session storage
+          localStorage.clear();
+          sessionStorage.clear();
+          
+          // Dispatch a custom event to notify the auth context
+          window.dispatchEvent(new CustomEvent('auth:logout', { 
+            detail: { reason: 'Token refresh failed' } 
+          }));
+          
+          // Reject the original request
+          return Promise.reject(new Error('Authentication failed. Please log in again.'));
         }
       }
 
@@ -227,6 +263,9 @@ export const auctionsAPI = {
   getAuctions: (params?: any): Promise<AxiosResponse<ApiResponse<AuctionsResponse>>> =>
     api.get('/auctions', { params }),
 
+  getMyAuctions: (params?: any): Promise<AxiosResponse<ApiResponse<AuctionsResponse>>> =>
+    api.get('/auctions/my-auctions', { params }),
+
   getAuction: (id: string): Promise<AxiosResponse<ApiResponse>> =>
     api.get(`/auctions/${id}`),
 
@@ -247,6 +286,9 @@ export const auctionsAPI = {
 
   getMyBids: (): Promise<AxiosResponse<ApiResponse>> =>
     api.get('/auctions/my-bids'),
+
+  restartAuction: (auctionId: string, data?: { startTime?: string; endTime?: string }): Promise<AxiosResponse<ApiResponse>> =>
+    api.post(`/auctions/${auctionId}/restart`, data),
 };
 
 // Messages API
@@ -257,8 +299,13 @@ export const messagesAPI = {
   getConversation: (id: string): Promise<AxiosResponse<ApiResponse>> =>
     api.get(`/messages/conversations/${id}`),
 
+  // DEPRECATED: This creates empty conversations - use sendMessageWithConversation instead
   createConversation: (data: any): Promise<AxiosResponse<ApiResponse>> =>
     api.post('/messages/conversations', data),
+
+  // NEW: Send message with automatic conversation creation (RECOMMENDED)
+  sendMessageWithConversation: (data: { productId: string; receiverId: string; content: string; messageType?: string }): Promise<AxiosResponse<ApiResponse>> =>
+    api.post('/messages/send', data),
 
   getMessages: (conversationId: string, params?: any): Promise<AxiosResponse<ApiResponse<MessagesResponse>>> =>
     api.get(`/messages/conversations/${conversationId}/messages`, { params }),
@@ -269,11 +316,16 @@ export const messagesAPI = {
   deleteMessage: (conversationId: string, messageId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.delete(`/messages/conversations/${conversationId}/messages/${messageId}`),
 
-  deleteConversation: (conversationId: string): Promise<AxiosResponse<ApiResponse>> =>
-    api.delete(`/messages/conversations/${conversationId}`),
+  closeConversation: (conversationId: string): Promise<AxiosResponse<ApiResponse>> => {
+    console.log('🔒 API: Closing conversation:', conversationId);
+    return api.put(`/messages/conversations/${conversationId}/close`);
+  },
 
   markAsRead: (conversationId: string, messageId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.put(`/messages/conversations/${conversationId}/messages/${messageId}/read`),
+
+  markConversationAsRead: (conversationId: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.put(`/messages/conversations/${conversationId}/read`),
 
   uploadAttachment: (conversationId: string, file: File): Promise<AxiosResponse<ApiResponse>> => {
     const formData = new FormData();
@@ -295,6 +347,15 @@ export const messagesAPI = {
 
   getEncryptionStatus: (conversationId: string): Promise<AxiosResponse<ApiResponse>> =>
     api.get(`/messages/conversations/${conversationId}/encryption-status`),
+
+  getUnreadCount: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/messages/unread-count'),
+
+  getUnreadNotifications: (limit?: number, since?: string): Promise<AxiosResponse<ApiResponse>> =>
+    api.get('/messages/unread-notifications', { params: { limit, since } }),
+
+  markNotificationsViewed: (): Promise<AxiosResponse<ApiResponse>> =>
+    api.post('/messages/mark-notifications-viewed'),
 };
 
 // Search API

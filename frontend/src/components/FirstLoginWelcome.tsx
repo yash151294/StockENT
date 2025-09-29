@@ -56,7 +56,10 @@ const FirstLoginWelcome: React.FC = () => {
           </Typography>
         </Box>
         <Typography variant="body2">
-          You have successfully signed in with Google. Here's what's happening with your account today.
+          {state.loginMethod === 'google' 
+            ? "You have successfully signed in with Google. Here's what's happening with your account today."
+            : "You have successfully signed in. Here's what's happening with your account today."
+          }
         </Typography>
       </Alert>
     </Box>

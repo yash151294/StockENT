@@ -50,17 +50,8 @@ redisClient.connect().catch((err) => {
   // Don't exit process, allow app to run without Redis
 });
 
-// Socket.IO setup
-const io = new Server(server, {
-  cors: {
-    origin:
-      process.env.SOCKET_CORS_ORIGIN ||
-      process.env.FRONTEND_URL ||
-      'http://localhost:3000',
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-});
+// Socket.IO setup - will be initialized in socket.js
+let io;
 
 // Security middleware
 app.use(
@@ -94,7 +85,7 @@ const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max:
     parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) ||
-    (process.env.NODE_ENV === 'development' ? 5000 : 100), // Much higher limit for development
+    (process.env.NODE_ENV === 'development' ? 100000 : 100), // Very high limit for development
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(
@@ -108,14 +99,8 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // CORS configuration
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  })
-);
+const { corsMiddleware } = require('./middleware/cors');
+app.use(corsMiddleware);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -148,54 +133,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/search', searchRoutes);
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  logger.info('User connected:', socket.id);
-
-  // Join auction room
-  socket.on('join-auction', (auctionId) => {
-    socket.join(`auction-${auctionId}`);
-    logger.info(`User ${socket.id} joined auction ${auctionId}`);
-  });
-
-  // Leave auction room
-  socket.on('leave-auction', (auctionId) => {
-    socket.leave(`auction-${auctionId}`);
-    logger.info(`User ${socket.id} left auction ${auctionId}`);
-  });
-
-  // Join conversation room
-  socket.on('join-conversation', (conversationId) => {
-    socket.join(`conversation-${conversationId}`);
-    logger.info(`User ${socket.id} joined conversation ${conversationId}`);
-  });
-
-  // Leave conversation room
-  socket.on('leave-conversation', (conversationId) => {
-    socket.leave(`conversation-${conversationId}`);
-    logger.info(`User ${socket.id} left conversation ${conversationId}`);
-  });
-
-  // Handle typing indicators
-  socket.on('typing-start', (data) => {
-    socket.to(`conversation-${data.conversationId}`).emit('user-typing', {
-      userId: data.userId,
-      isTyping: true,
-    });
-  });
-
-  socket.on('typing-stop', (data) => {
-    socket.to(`conversation-${data.conversationId}`).emit('user-typing', {
-      userId: data.userId,
-      isTyping: false,
-    });
-  });
-
-  // Handle disconnection
-  socket.on('disconnect', (reason) => {
-    logger.info(`User ${socket.id} disconnected: ${reason}`);
-  });
-});
+// Socket.IO connection handling is now done in utils/socket.js
 
 // Make io and redis available to routes
 app.set('io', io);
@@ -251,6 +189,15 @@ const initializeServer = async () => {
     logger.warn(
       '   To enable caching, ensure Redis is running on localhost:6379'
     );
+  }
+
+  // Initialize Socket.IO
+  try {
+    const { initSocket } = require('./utils/socket');
+    io = initSocket(server);
+    logger.info('✅ Socket.IO initialized successfully');
+  } catch (error) {
+    logger.error('❌ Failed to initialize Socket.IO:', error);
   }
 
   // Start cron jobs for auction processing

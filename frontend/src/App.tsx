@@ -19,6 +19,7 @@ import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import ProductCreatePage from './pages/ProductCreatePage';
+import ProductEditPage from './pages/ProductEditPage';
 import AuctionsPage from './pages/AuctionsPage';
 import AuctionDetailPage from './pages/AuctionDetailPage';
 import MessagesPage from './pages/MessagesPage';
@@ -279,9 +280,9 @@ function App() {
         <ThemeProvider theme={theme}>
           <CssBaseline />
           <LanguageProvider>
-            <NotificationProvider>
-              <AuthProvider>
-                <SocketProvider>
+            <AuthProvider>
+              <SocketProvider>
+                <NotificationProvider>
                 <Router
                   future={{
                     v7_startTransition: true,
@@ -344,6 +345,14 @@ function App() {
                       </Layout>
                     } />
                     
+                    <Route path="/products/:id/edit" element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <ProductEditPage />
+                        </Layout>
+                      </ProtectedRoute>
+                    } />
+                    
                     <Route path="/auctions" element={
                       <Layout>
                         <AuctionsPage />
@@ -399,9 +408,9 @@ function App() {
                     } />
                   </Routes>
                 </Router>
+                </NotificationProvider>
               </SocketProvider>
             </AuthProvider>
-          </NotificationProvider>
           </LanguageProvider>
         </ThemeProvider>
       </QueryClientProvider>

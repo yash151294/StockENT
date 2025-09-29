@@ -5,15 +5,23 @@ const {
 } = require('../services/auctionService');
 const { logger } = require('../utils/logger');
 
+// Auction processing job runs every 5 seconds for real-time responsiveness
+// Ending soon notifications run every 30 minutes
+
 const processAuctionsJob = cron.schedule(
-  '* * * * *',
+  '*/5 * * * * *',
   async () => {
     try {
-      logger.info('Running auction processing job...');
-      await processScheduledAuctions();
-      logger.info('Auction processing job completed');
+      logger.info('🔄 Running auction processing job (every 5 seconds)...');
+      const result = await processScheduledAuctions();
+      logger.info('✅ Auction processing job completed');
+      
+      // Log if any auctions were processed
+      if (result && (result.startedCount > 0 || result.endedCount > 0)) {
+        logger.info(`📊 Processed ${result.startedCount} started and ${result.endedCount} ended auctions`);
+      }
     } catch (error) {
-      logger.error('Auction processing job failed:', error);
+      logger.error('❌ Auction processing job failed:', error);
     }
   },
   { scheduled: false }

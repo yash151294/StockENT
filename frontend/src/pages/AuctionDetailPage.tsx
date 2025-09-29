@@ -43,6 +43,8 @@ import {
   Favorite,
   FavoriteBorder,
   History,
+  RestartAlt,
+  Info,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,6 +55,9 @@ import { useSocket } from '../contexts/SocketContext';
 import { useNotification } from '../contexts/NotificationContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { Auction } from '../types';
+import NumericInput from '../components/NumericInput';
+import CalendarInput from '../components/CalendarInput';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 
 const AuctionDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -68,8 +73,12 @@ const AuctionDetailPage: React.FC = () => {
   const [bidAmount, setBidAmount] = useState('');
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false);
+  const [restartStartTime, setRestartStartTime] = useState('');
+  const [restartEndTime, setRestartEndTime] = useState('');
+  const [restartErrors, setRestartErrors] = useState<{ [key: string]: string }>({});
 
-  // Fetch auction details
+  // Fetch auction details with improved throttling and error handling
   const { 
     data: auction, 
     isLoading, 
@@ -79,13 +88,37 @@ const AuctionDetailPage: React.FC = () => {
     queryKey: ['auction', id],
     queryFn: async () => {
       if (!id) throw new Error('Auction ID is required');
-      const response = await auctionsAPI.getAuction(id);
-      return response.data.data;
+      
+      try {
+        const response = await auctionsAPI.getAuction(id);
+        return response.data.data;
+      } catch (error: any) {
+        // Handle authentication errors specifically
+        if (error.response?.status === 401) {
+          console.warn('🚫 Authentication failed, user may need to log in again');
+          // Don't throw the error immediately, let the auth context handle it
+          throw new Error('Authentication failed. Please log in again.');
+        }
+        throw error;
+      }
     },
     enabled: !!id,
-    retry: 3,
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 10 * 1000, // Refetch every 10 seconds for live updates
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (error?.message?.includes('Authentication failed')) {
+        return false;
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3;
+    },
+    staleTime: 15 * 1000, // 15 seconds - longer to reduce requests
+    refetchInterval: 30 * 1000, // Refetch every 30 seconds for live updates
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff with jitter
+      const baseDelay = Math.min(1000 * Math.pow(2, attemptIndex), 30000);
+      const jitter = Math.random() * 1000;
+      return baseDelay + jitter;
+    },
   });
 
   // Place bid mutation
@@ -123,6 +156,37 @@ const AuctionDetailPage: React.FC = () => {
     },
   });
 
+  // Restart auction mutation
+  const restartAuctionMutation = useMutation({
+    mutationFn: async (data?: { startTime?: string; endTime?: string }) => {
+      if (!id) throw new Error('Auction ID is required');
+      return await auctionsAPI.restartAuction(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auction', id] });
+      queryClient.invalidateQueries({ queryKey: ['auctions'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      showSuccess('Auction restarted successfully!');
+      setRestartConfirmOpen(false);
+      // Reset form
+      setRestartStartTime('');
+      setRestartEndTime('');
+      setRestartErrors({});
+    },
+    onError: (error: any) => {
+      console.error('Restart auction error:', error);
+      showWarning(error.response?.data?.error || 'Failed to restart auction');
+    },
+  });
+
+  // Handle authentication failures
+  useEffect(() => {
+    if (error && (error as any)?.response?.status === 401) {
+      console.warn('🚫 Authentication failed, redirecting to login...');
+      navigate('/login', { replace: true });
+    }
+  }, [error, navigate]);
+
   // Socket connection for real-time updates
   useEffect(() => {
     if (socket && id) {
@@ -134,16 +198,60 @@ const AuctionDetailPage: React.FC = () => {
         }
       });
 
-      socket.on('bid-placed', (data) => {
+      socket.on('bid_placed', (data) => {
         if (data.auctionId === id) {
           queryClient.invalidateQueries({ queryKey: ['auction', id] });
+        }
+      });
+
+      socket.on('auction_status_changed', (data) => {
+        if (data.auctionId === id) {
+          console.log('Auction status changed:', data);
+          // Force immediate refetch to get updated auction data
+          queryClient.invalidateQueries({ queryKey: ['auction', id] });
+          // Also invalidate auctions list to update the main page
+          queryClient.invalidateQueries({ queryKey: ['auctions'] });
+        }
+      });
+
+      socket.on('auction_started', (data) => {
+        if (data.auctionId === id) {
+          console.log('Auction started:', data);
+          // Force immediate refetch to get updated auction data
+          queryClient.invalidateQueries({ queryKey: ['auction', id] });
+          // Also invalidate auctions list to update the main page
+          queryClient.invalidateQueries({ queryKey: ['auctions'] });
+        }
+      });
+
+      socket.on('auction_ended', (data) => {
+        if (data.auctionId === id) {
+          console.log('Auction ended:', data);
+          // Force immediate refetch to get updated auction data
+          queryClient.invalidateQueries({ queryKey: ['auction', id] });
+          // Also invalidate auctions list to update the main page
+          queryClient.invalidateQueries({ queryKey: ['auctions'] });
+        }
+      });
+
+      socket.on('auction_restarted', (data) => {
+        if (data.auctionId === id) {
+          console.log('Auction restarted:', data);
+          // Force immediate refetch to get updated auction data
+          queryClient.invalidateQueries({ queryKey: ['auction', id] });
+          // Also invalidate auctions list to update the main page
+          queryClient.invalidateQueries({ queryKey: ['auctions'] });
         }
       });
 
       return () => {
         socket.emit('leave-auction', id);
         socket.off('auction-updated');
-        socket.off('bid-placed');
+        socket.off('bid_placed');
+        socket.off('auction_status_changed');
+        socket.off('auction_started');
+        socket.off('auction_ended');
+        socket.off('auction_restarted');
       };
     }
   }, [socket, id, queryClient]);
@@ -201,6 +309,57 @@ const AuctionDetailPage: React.FC = () => {
       setWatchlistLoading(false);
     }
   }, [watchlistMutation]);
+
+  const handleRestartAuction = useCallback(() => {
+    if (!authState.isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setRestartConfirmOpen(true);
+  }, [authState.isAuthenticated, navigate]);
+
+  const validateRestartTimes = () => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (restartStartTime && restartEndTime) {
+      const startTime = new Date(restartStartTime);
+      const endTime = new Date(restartEndTime);
+      const now = new Date();
+
+      if (startTime <= now) {
+        newErrors.startTime = 'Start time must be in the future';
+      }
+      if (endTime <= startTime) {
+        newErrors.endTime = 'End time must be after start time';
+      }
+    }
+
+    setRestartErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleConfirmRestart = useCallback(async () => {
+    if (restartStartTime && restartEndTime) {
+      if (!validateRestartTimes()) {
+        return;
+      }
+      try {
+        await restartAuctionMutation.mutateAsync({
+          startTime: restartStartTime,
+          endTime: restartEndTime
+        });
+      } catch (error) {
+        console.error('Failed to restart auction:', error);
+      }
+    } else {
+      // Use default restart (immediate)
+      try {
+        await restartAuctionMutation.mutateAsync(undefined);
+      } catch (error) {
+        console.error('Failed to restart auction:', error);
+      }
+    }
+  }, [restartAuctionMutation, restartStartTime, restartEndTime]);
 
   const formatPrice = (price: number, currency: string) => {
     const symbols: { [key: string]: string } = {
@@ -346,7 +505,8 @@ const AuctionDetailPage: React.FC = () => {
   }
 
   const isActive = auction.status === 'ACTIVE';
-  const canBid = isActive && authState.isAuthenticated;
+  const isSeller = authState.isAuthenticated && auction?.product?.seller?.id === authState.user?.id;
+  const canBid = isActive && authState.isAuthenticated && !isSeller;
   const timeRemaining = getTimeRemaining(auction.endsAt);
   const progressPercentage = getProgressPercentage(auction.startsAt || auction.startTime, auction.endsAt);
 
@@ -429,33 +589,95 @@ const AuctionDetailPage: React.FC = () => {
 
       <Box sx={{ p: { xs: 2, md: 4 } }}>
         <Grid container spacing={4}>
-          {/* Left Column - Product Images */}
+          {/* Left Column - Product Images and Auction Details */}
           <Grid item xs={12} md={6}>
-            <Card sx={{
-              background: 'rgba(17, 17, 17, 0.8)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(99, 102, 241, 0.1)',
-              borderRadius: 3,
-              overflow: 'hidden',
-            }}>
-              <CardMedia
-                component="img"
-                height="400"
-                image={getImageUrl(auction.product?.images?.[0]?.imageUrl)}
-                alt={auction.product?.title || 'Auction item'}
-                sx={{ 
-                  objectFit: 'cover',
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
+              {/* Product Image Card */}
+              <LiquidGlassCard
+                variant="default"
+                hoverEffect={true}
+                glassIntensity="high"
+                customSx={{
+                  flex: 1,
+                  overflow: 'hidden',
                 }}
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = getImageUrl(null);
+              >
+                <CardMedia
+                  component="img"
+                  height="400"
+                  image={getImageUrl(auction.product?.images?.[0]?.imageUrl)}
+                  alt={auction.product?.title || 'Auction item'}
+                  sx={{ 
+                    objectFit: 'cover',
+                  }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = getImageUrl(null);
+                  }}
+                />
+              </LiquidGlassCard>
+
+              {/* Auction Details Card */}
+              <LiquidGlassCard
+                variant="default"
+                hoverEffect={true}
+                glassIntensity="high"
+                customSx={{
+                  flex: 1,
+                  p: 3,
                 }}
-              />
-            </Card>
+              >
+                <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
+                  Auction Details
+                </Typography>
+                <List dense>
+                  <ListItem>
+                    <ListItemText
+                      primary="Starting Price"
+                      secondary={formatPrice(auction.startingPrice || 0, auction.product?.currency || 'USD')}
+                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText
+                      primary="Bid Count"
+                      secondary={auction.bidCount || 0}
+                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText
+                      primary="Auction Type"
+                      secondary={auction.auctionType || 'ENGLISH'}
+                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText
+                      primary="Start Time"
+                      secondary={auction.startsAt || auction.startTime ? new Date(auction.startsAt || auction.startTime).toLocaleString() : 'Not set'}
+                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                  <ListItem>
+                    <ListItemText
+                      primary="End Time"
+                      secondary={auction.endsAt ? new Date(auction.endsAt).toLocaleString() : 'Not set'}
+                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
+                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
+                    />
+                  </ListItem>
+                </List>
+              </LiquidGlassCard>
+            </Box>
           </Grid>
 
-          {/* Right Column - Auction Details */}
+          {/* Right Column - Product Details and Bidding */}
           <Grid item xs={12} md={6}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, height: '100%' }}>
               {/* Product Title and Status */}
               <Box>
                 <Typography 
@@ -505,13 +727,14 @@ const AuctionDetailPage: React.FC = () => {
               </Typography>
 
               {/* Current Bid */}
-              <Card sx={{
-                background: 'rgba(17, 17, 17, 0.6)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
-                borderRadius: 2,
-                p: 3,
-              }}>
+              <LiquidGlassCard
+                variant="default"
+                hoverEffect={true}
+                glassIntensity="high"
+                customSx={{
+                  p: 3,
+                }}
+              >
                 <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                   <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
                     Current Bid
@@ -547,26 +770,31 @@ const AuctionDetailPage: React.FC = () => {
                     />
                   </>
                 )}
-              </Card>
+              </LiquidGlassCard>
 
               {/* Bid Form */}
               {canBid && (
-                <Card sx={{
-                  background: 'rgba(17, 17, 17, 0.6)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  borderRadius: 2,
-                  p: 3,
-                }}>
+                <LiquidGlassCard
+                  variant="default"
+                  hoverEffect={true}
+                  glassIntensity="high"
+                  customSx={{
+                    p: 3,
+                  }}
+                >
                   <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
                     Place Your Bid
                   </Typography>
                   <Box display="flex" gap={2} alignItems="center">
-                    <TextField
-                      type="number"
+                    <NumericInput
                       placeholder="Enter bid amount"
                       value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
+                      onChange={setBidAmount}
+                      allowDecimals={true}
+                      allowNegative={false}
+                      min={0}
+                      step={0.01}
+                      precision={2}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
@@ -592,7 +820,28 @@ const AuctionDetailPage: React.FC = () => {
                       {placeBidMutation.isPending ? 'Placing...' : 'Place Bid'}
                     </Button>
                   </Box>
-                </Card>
+                </LiquidGlassCard>
+              )}
+
+              {/* Seller Notice */}
+              {isActive && isSeller && (
+                <LiquidGlassCard
+                  variant="default"
+                  hoverEffect={true}
+                  glassIntensity="high"
+                  customSx={{
+                    p: 3,
+                    border: '1px solid rgba(255, 193, 7, 0.3)',
+                    background: 'rgba(255, 193, 7, 0.05)',
+                  }}
+                >
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Info sx={{ color: '#FFC107', fontSize: 24 }} />
+                    <Typography variant="body1" sx={{ color: '#FFC107', fontWeight: 500 }}>
+                      You cannot bid on your own auction. This auction is for other buyers to participate.
+                    </Typography>
+                  </Box>
+                </LiquidGlassCard>
               )}
 
               {/* Action Buttons */}
@@ -647,16 +896,36 @@ const AuctionDetailPage: React.FC = () => {
                 >
                   Share
                 </Button>
+
+                {/* Restart Auction Button - Only show for ended auctions and if user is the seller */}
+                {auction?.status === 'ENDED' && authState.isAuthenticated && auction?.product?.seller?.id === authState.user?.id && (
+                  <Button
+                    variant="contained"
+                    startIcon={<RestartAlt />}
+                    onClick={handleRestartAuction}
+                    disabled={restartAuctionMutation.isPending}
+                    sx={{
+                      background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #D97706 0%, #EA580C 100%)',
+                      }
+                    }}
+                  >
+                    {restartAuctionMutation.isPending ? 'Restarting...' : 'Restart Auction'}
+                  </Button>
+                )}
               </Box>
 
               {/* Seller Information */}
-              <Card sx={{
-                background: 'rgba(17, 17, 17, 0.6)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
-                borderRadius: 2,
-                p: 3,
-              }}>
+              <LiquidGlassCard
+                variant="default"
+                hoverEffect={true}
+                glassIntensity="high"
+                customSx={{
+                  p: 3,
+                  flex: 1,
+                }}
+              >
                 <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
                   Seller Information
                 </Typography>
@@ -677,62 +946,7 @@ const AuctionDetailPage: React.FC = () => {
                     </Typography>
                   </Box>
                 </Box>
-              </Card>
-
-              {/* Auction Details */}
-              <Card sx={{
-                background: 'rgba(17, 17, 17, 0.6)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(99, 102, 241, 0.2)',
-                borderRadius: 2,
-                p: 3,
-              }}>
-                <Typography variant="h6" sx={{ mb: 2, color: 'white' }}>
-                  Auction Details
-                </Typography>
-                <List dense>
-                  <ListItem>
-                    <ListItemText
-                      primary="Starting Price"
-                      secondary={formatPrice(auction.startingPrice || 0, auction.product?.currency || 'USD')}
-                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText
-                      primary="Bid Count"
-                      secondary={auction.bidCount || 0}
-                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText
-                      primary="Auction Type"
-                      secondary={auction.auctionType || 'ENGLISH'}
-                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText
-                      primary="Start Time"
-                      secondary={auction.startsAt || auction.startTime ? new Date(auction.startsAt || auction.startTime).toLocaleString() : 'Not set'}
-                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText
-                      primary="End Time"
-                      secondary={auction.endsAt ? new Date(auction.endsAt).toLocaleString() : 'Not set'}
-                      primaryTypographyProps={{ color: 'rgba(255, 255, 255, 0.7)' }}
-                      secondaryTypographyProps={{ color: 'white', fontWeight: 600 }}
-                    />
-                  </ListItem>
-                </List>
-              </Card>
+              </LiquidGlassCard>
             </Box>
           </Grid>
         </Grid>
@@ -765,6 +979,102 @@ const AuctionDetailPage: React.FC = () => {
             disabled={watchlistLoading}
           >
             {watchlistLoading ? 'Removing...' : 'Remove'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Restart Auction Confirmation Dialog */}
+      <Dialog
+        open={restartConfirmOpen}
+        onClose={() => setRestartConfirmOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Restart Auction</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            Choose when you want to restart this auction. You can either restart immediately or schedule it for later.
+          </Typography>
+          
+          <Typography variant="h6" sx={{ mb: 2, color: 'primary.main' }}>
+            Auction Schedule
+          </Typography>
+          
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={6}>
+              <CalendarInput
+                fullWidth
+                label="New Start Time"
+                value={restartStartTime}
+                onChange={(value) => {
+                  setRestartStartTime(value);
+                  if (restartErrors.startTime) {
+                    setRestartErrors(prev => ({ ...prev, startTime: '' }));
+                  }
+                }}
+                error={!!restartErrors.startTime}
+                helperText={restartErrors.startTime || 'Leave empty to restart immediately'}
+                format="datetime-local"
+                minDate={new Date().toISOString().slice(0, 16)}
+              />
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <CalendarInput
+                fullWidth
+                label="New End Time"
+                value={restartEndTime}
+                onChange={(value) => {
+                  setRestartEndTime(value);
+                  if (restartErrors.endTime) {
+                    setRestartErrors(prev => ({ ...prev, endTime: '' }));
+                  }
+                }}
+                error={!!restartErrors.endTime}
+                helperText={restartErrors.endTime || 'Leave empty to use original duration'}
+                format="datetime-local"
+                minDate={restartStartTime || new Date().toISOString().slice(0, 16)}
+              />
+            </Grid>
+          </Grid>
+
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="body2">
+              <strong>What will happen:</strong>
+            </Typography>
+            <Box component="ul" sx={{ mt: 1, pl: 2, mb: 0 }}>
+              <Typography component="li" variant="body2">Reset the auction to active status</Typography>
+              <Typography component="li" variant="body2">Clear all previous bids</Typography>
+              <Typography component="li" variant="body2">
+                {restartStartTime && restartEndTime 
+                  ? 'Use your custom start and end times' 
+                  : 'Use immediate start with original duration'
+                }
+              </Typography>
+              <Typography component="li" variant="body2">Make the product available for bidding again</Typography>
+            </Box>
+          </Alert>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRestartConfirmOpen(false);
+              setRestartStartTime('');
+              setRestartEndTime('');
+              setRestartErrors({});
+            }}
+            disabled={restartAuctionMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmRestart}
+            color="warning"
+            variant="contained"
+            disabled={restartAuctionMutation.isPending}
+            startIcon={<RestartAlt />}
+          >
+            {restartAuctionMutation.isPending ? 'Restarting...' : 'Restart Auction'}
           </Button>
         </DialogActions>
       </Dialog>

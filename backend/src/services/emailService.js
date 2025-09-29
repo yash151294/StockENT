@@ -271,6 +271,22 @@ const sendAuctionNotification = async (
           </div>
         `;
         break;
+      case 'RESTARTED':
+        subject = 'Auction Restarted - StockENT';
+        content = `
+          <h2>Your Auction Has Been Restarted!</h2>
+          <p>The auction for "${auctionData.product.title}" has been restarted and is now accepting new bids.</p>
+          <p><strong>New Start Time:</strong> ${new Date(auctionData.startTime).toLocaleString()}</p>
+          <p><strong>New End Time:</strong> ${new Date(auctionData.endTime).toLocaleString()}</p>
+          <p><strong>Starting Price:</strong> $${auctionData.startingPrice}</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL}/auctions/${auctionData.id}" 
+               style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+              View Restarted Auction
+            </a>
+          </div>
+        `;
+        break;
       default:
         return;
     }

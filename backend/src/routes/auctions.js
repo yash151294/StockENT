@@ -8,6 +8,7 @@ const {
   getUserAuctions,
   getUserBids,
   placeBid,
+  restartAuction,
 } = require('../services/auctionService');
 
 const router = express.Router();
@@ -111,6 +112,32 @@ router.post(
       res.status(201).json({
         success: true,
         data: bid,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/auctions/:id/restart
+ * @desc    Restart an ended auction
+ * @access  Private (Seller only)
+ */
+router.post(
+  '/:id/restart',
+  [authenticateToken, validate],
+  async (req, res) => {
+    try {
+      const { startTime, endTime } = req.body;
+      const auction = await restartAuction(req.params.id, req.user.id, startTime, endTime);
+      res.json({
+        success: true,
+        data: auction,
+        message: 'Auction restarted successfully',
       });
     } catch (error) {
       res.status(400).json({

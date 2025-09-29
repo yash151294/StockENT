@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Box,
   Grid,
-  Card,
   CardContent,
   Typography,
   Avatar,
@@ -27,6 +26,9 @@ import { useConversations } from '../hooks/useConversations';
 import { dashboardAPI } from '../services/api';
 import { motion } from 'framer-motion';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassStatsCard from '../components/LiquidGlassStatsCard';
+import LiquidGlassCard from '../components/LiquidGlassCard';
+import NotificationDebug from '../components/NotificationDebug';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -78,9 +80,9 @@ const DashboardPage: React.FC = () => {
     queryKey: ['dashboard', state.user?.role], // Include user role in query key
     queryFn: () => dashboardAPI.getDashboardStats(),
     enabled: state.isAuthenticated,
-    staleTime: 0, // Always consider data stale to force refresh
-    gcTime: 0, // Don't cache data
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
+    gcTime: 5 * 60 * 1000, // Cache data for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce requests
     refetchOnMount: true, // Always refetch when component mounts
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
@@ -93,6 +95,28 @@ const DashboardPage: React.FC = () => {
       setDashboardData(dashboardResponse.data.data);
     }
   }, [dashboardResponse]);
+
+  // Force refresh dashboard data when component becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && state.isAuthenticated) {
+        console.log('🔄 Dashboard became visible, refetching data...');
+        refetch();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also refetch when component mounts (user navigates to dashboard)
+    if (state.isAuthenticated) {
+      console.log('🔄 Dashboard mounted, refetching data...');
+      refetch();
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refetch, state.isAuthenticated]);
 
   // Log errors
   useEffect(() => {
@@ -331,7 +355,10 @@ const DashboardPage: React.FC = () => {
                 Welcome back, {getDisplayName()}!
               </Typography>
               <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                You have successfully signed in with Google. Here's what's happening with your account today.
+                {state.loginMethod === 'google' 
+                  ? "You have successfully signed in with Google. Here's what's happening with your account today."
+                  : "You have successfully signed in. Here's what's happening with your account today."
+                }
               </Typography>
             </Alert>
           </motion.div>
@@ -362,7 +389,8 @@ const DashboardPage: React.FC = () => {
       </Box>
 
       {/* Welcome Card with Stats */}
-      <motion.div
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ 
           opacity: 1, 
@@ -374,20 +402,13 @@ const DashboardPage: React.FC = () => {
           ease: "easeInOut"
         }}
       >
-        <Card
-          sx={{
-            background: 'rgba(17, 17, 17, 0.8)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(99, 102, 241, 0.1)',
-            borderRadius: 3,
-            transition: 'all 0.3s ease',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+        <LiquidGlassCard
+          variant="default"
+          hoverEffect={true}
+          glassIntensity="medium"
+          borderGlow={true}
+          customSx={{
             mb: 6,
-            '&:hover': {
-              transform: 'translateY(-4px)',
-              borderColor: 'rgba(99, 102, 241, 0.3)',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-            },
           }}
         >
           <CardContent sx={{ p: 4 }}>
@@ -447,91 +468,40 @@ const DashboardPage: React.FC = () => {
                       ease: "easeInOut"
                     }}
                   >
-                    <Box
-                      sx={{
-                        cursor: 'pointer',
-                        p: 3,
-                        borderRadius: 2,
-                        background: 'rgba(99, 102, 241, 0.05)',
-                        border: '1px solid rgba(99, 102, 241, 0.1)',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          background: 'rgba(99, 102, 241, 0.1)',
-                          borderColor: 'rgba(99, 102, 241, 0.2)',
-                          transform: 'translateY(-2px)',
-                        },
-                      }}
-                      onClick={stat.action}
-                    >
-                      <Box display="flex" alignItems="center" justifyContent="space-between">
-                        <Box>
-                          {loading || isRoleChanging ? (
-                            <Skeleton variant="text" width={60} height={40} />
-                          ) : (
-                            <motion.div
-                              key={stat.value}
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ duration: 0.4, ease: "easeOut" }}
-                            >
-                              <Typography 
-                                variant="h3" 
-                                component="div" 
-                                sx={{ 
-                                  fontWeight: 800,
-                                  color: '#6366F1',
-                                  mb: 1,
-                                }}
-                              >
-                                {stat.value}
-                              </Typography>
-                            </motion.div>
-                          )}
-                          <Typography 
-                            variant="h6" 
-                            sx={{ 
-                              color: 'rgba(255, 255, 255, 0.8)',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {stat.title}
-                          </Typography>
-                        </Box>
-                        <Avatar
-                          sx={{
-                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
-                            color: '#000000',
-                            width: 50,
-                            height: 50,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {stat.icon}
-                        </Avatar>
-                      </Box>
-                    </Box>
+                    <LiquidGlassStatsCard
+                      title={stat.title}
+                      value={stat.value}
+                      icon={stat.icon}
+                      color={stat.color as any}
+                      action={stat.action}
+                      loading={loading || isRoleChanging}
+                      variant="default"
+                    />
                   </motion.div>
                 </Grid>
               ))}
             </Grid>
           </CardContent>
-        </Card>
-      </motion.div>
+        </LiquidGlassCard>
+        </motion.div>
+      </Box>
 
 
-      <Grid container spacing={3}>
-        {/* Quick Actions */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{
-            background: 'rgba(17, 17, 17, 0.8)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(99, 102, 241, 0.1)',
-            borderRadius: 3,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <Grid container spacing={3}>
+          {/* Quick Actions */}
+          <Grid item xs={12} md={6}>
+          <LiquidGlassCard
+            variant="default"
+            hoverEffect={true}
+            glassIntensity="high"
+            borderGlow={true}
+            customSx={{
+              height: 500,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
             <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Typography 
                 variant="h6" 
@@ -561,22 +531,22 @@ const DashboardPage: React.FC = () => {
                         ease: "easeOut"
                       }}
                     >
-                      <Card
-                      sx={{
-                        cursor: 'pointer',
-                        background: 'rgba(17, 17, 17, 0.6)',
-                        border: '1px solid rgba(99, 102, 241, 0.1)',
-                        borderRadius: 2,
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateY(-4px)',
-                          borderColor: 'rgba(99, 102, 241, 0.3)',
-                          background: 'rgba(17, 17, 17, 0.8)',
-                          boxShadow: '0 8px 20px rgba(99, 102, 241, 0.2)',
-                        },
-                      }}
-                      onClick={action.action}
-                    >
+                      <LiquidGlassCard
+                        variant="subtle"
+                        hoverEffect={true}
+                        glassIntensity="low"
+                        borderGlow={true}
+                        onClick={action.action}
+                        customSx={{
+                          cursor: 'pointer',
+                          background: 'rgba(17, 17, 17, 0.6)',
+                          border: '1px solid rgba(99, 102, 241, 0.1)',
+                          borderRadius: 2,
+                          '&:hover': {
+                            background: 'rgba(17, 17, 17, 0.8)',
+                          },
+                        }}
+                      >
                       <CardContent sx={{ textAlign: 'center', py: 2 }}>
                         <Avatar
                           sx={{
@@ -611,27 +581,28 @@ const DashboardPage: React.FC = () => {
                           {action.description}
                         </Typography>
                       </CardContent>
-                    </Card>
+                    </LiquidGlassCard>
                     </motion.div>
                   </Grid>
                 ))}
               </Grid>
             </CardContent>
-          </Card>
+          </LiquidGlassCard>
         </Grid>
 
         {/* Recent Activity */}
         <Grid item xs={12} md={6}>
-          <Card sx={{
-            background: 'rgba(17, 17, 17, 0.8)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(99, 102, 241, 0.1)',
-            borderRadius: 3,
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
+          <LiquidGlassCard
+            variant="default"
+            hoverEffect={true}
+            glassIntensity="high"
+            borderGlow={true}
+            customSx={{
+              height: 500,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
             <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
                 <Typography 
@@ -646,30 +617,32 @@ const DashboardPage: React.FC = () => {
                   Recent Activity
                 </Typography>
                 <Tooltip title="Refresh recent activity">
-                  <IconButton
-                    onClick={() => refetch()}
-                    disabled={loading}
-                    sx={{
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      '&:hover': {
-                        color: '#6366F1',
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                      },
-                      '&:disabled': {
-                        color: 'rgba(255, 255, 255, 0.3)',
-                      }
-                    }}
-                  >
-                    <Refresh 
+                  <span>
+                    <IconButton
+                      onClick={() => refetch()}
+                      disabled={loading}
                       sx={{
-                        animation: loading ? 'spin 1s linear infinite' : 'none',
-                        '@keyframes spin': {
-                          '0%': { transform: 'rotate(0deg)' },
-                          '100%': { transform: 'rotate(360deg)' },
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        '&:hover': {
+                          color: '#6366F1',
+                          backgroundColor: 'rgba(99, 102, 241, 0.1)',
                         },
+                        '&:disabled': {
+                          color: 'rgba(255, 255, 255, 0.3)',
+                        }
                       }}
-                    />
-                  </IconButton>
+                    >
+                      <Refresh 
+                        sx={{
+                          animation: loading ? 'spin 1s linear infinite' : 'none',
+                          '@keyframes spin': {
+                            '0%': { transform: 'rotate(0deg)' },
+                            '100%': { transform: 'rotate(360deg)' },
+                          },
+                        }}
+                      />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               </Box>
               <Box sx={{ flex: 1 }}>
@@ -775,10 +748,18 @@ const DashboardPage: React.FC = () => {
               )}
               </Box>
             </CardContent>
-          </Card>
-        </Grid>
+          </LiquidGlassCard>
+          </Grid>
 
-      </Grid>
+        </Grid>
+      </Box>
+
+      {/* Debug Panel - Remove in production */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ mt: 3 }}>
+          <NotificationDebug />
+        </Box>
+      )}
 
     </Box>
   );

@@ -12,6 +12,7 @@ import {
   ToggleButtonGroup,
   Chip,
   Stack,
+  IconButton,
 } from '@mui/material';
 import {
   Search,
@@ -32,10 +33,10 @@ import {
   CheckCircle,
   TrendingDown,
   LocalShipping,
-  Support,
   Analytics,
-  Shield,
   Bolt,
+  VolumeOff,
+  VolumeUp,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -44,6 +45,7 @@ import { useNotification } from '../contexts/NotificationContext';
 import { authAPI } from '../services/api';
 import RoleChip from '../components/RoleChip';
 import Logo from '../components/Logo';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 import { motion } from 'framer-motion';
 
 const LandingPage: React.FC = () => {
@@ -54,6 +56,7 @@ const LandingPage: React.FC = () => {
   const theme = useTheme();
 
   const [userType, setUserType] = React.useState<'buyer' | 'seller'>('buyer');
+  const [isVideoMuted, setIsVideoMuted] = React.useState(true);
 
   const handleUserTypeChange = async (
     event: React.MouseEvent<HTMLElement>,
@@ -321,158 +324,90 @@ const LandingPage: React.FC = () => {
             </Box>
           </motion.div>
           
-          <Grid container spacing={5} alignItems="center" sx={{ 
-            justifyContent: 'center',
-            width: '100%'
-          }}>
-            <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                style={{ willChange: 'transform, opacity', width: '100%' }}
+          {/* Content Section */}
+          <Box sx={{ mb: 8, width: '100%' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              style={{ width: '100%', textAlign: 'center' }}
+            >
+              <Typography 
+                variant="h1" 
+                component="h1" 
+                gutterBottom 
+                sx={{ 
+                  fontWeight: 800,
+                  fontSize: { xs: '2.2rem', md: '3rem', lg: '3.5rem' },
+                  lineHeight: 1.1,
+                  mb: 3,
+                  background: 'linear-gradient(135deg, #FFFFFF 0%, #6366F1 100%)',
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
               >
-                <Typography 
-                  variant="h1" 
-                  component="h1" 
-                  gutterBottom 
-                  sx={{ 
-                    fontWeight: 800,
-                    fontSize: { xs: '2.2rem', md: '3rem', lg: '3.5rem' },
-                    lineHeight: 1.1,
-                    mb: 3,
-                    textAlign: 'center',
-                    background: 'linear-gradient(135deg, #FFFFFF 0%, #6366F1 100%)',
-                    backgroundClip: 'text',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
-                  {state.isAuthenticated ? (
-                    state.user?.role === 'SELLER' 
-                      ? 'Sell Your Textile Products'
-                      : 'Find Quality Textile Materials'
-                  ) : userType === 'seller'
+                {state.isAuthenticated ? (
+                  state.user?.role === 'SELLER' 
                     ? 'Sell Your Textile Products'
-                    : 'Find Quality Textile Materials'}
-                </Typography>
-                <Typography 
-                  variant="h5" 
-                  gutterBottom 
-                  sx={{ 
-                    opacity: 0.8, 
-                    mb: 4,
-                    textAlign: 'center',
-                    fontSize: { xs: '1.1rem', md: '1.3rem' },
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {state.isAuthenticated ? (
-                    state.user?.role === 'SELLER' 
-                      ? 'List your surplus inventory and connect with buyers worldwide. Create auctions, set fixed prices, and grow your business.'
-                      : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'
-                  ) : userType === 'seller'
+                    : 'Find Quality Textile Materials'
+                ) : userType === 'seller'
+                  ? 'Sell Your Textile Products'
+                  : 'Find Quality Textile Materials'}
+              </Typography>
+              <Typography 
+                variant="h5" 
+                gutterBottom 
+                sx={{ 
+                  opacity: 0.8, 
+                  mb: 4,
+                  fontSize: { xs: '1.1rem', md: '1.3rem' },
+                  lineHeight: 1.6,
+                  maxWidth: 800,
+                  mx: 'auto',
+                }}
+              >
+                {state.isAuthenticated ? (
+                  state.user?.role === 'SELLER' 
                     ? 'List your surplus inventory and connect with buyers worldwide. Create auctions, set fixed prices, and grow your business.'
-                    : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'}
-                </Typography>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 4, justifyContent: 'center' }}>
-                    {state.isAuthenticated ? (
-                      <>
-                        <Button
-                          variant="contained"
-                          size="large"
-                          onClick={() => navigate('/dashboard')}
-                          endIcon={<ArrowForward />}
-                          sx={{ 
-                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
-                            color: '#000000',
-                            fontWeight: 600,
-                            px: 4,
-                            py: 1.5,
-                            fontSize: '1.1rem',
-                            '&:hover': { 
-                              background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
-                              transform: 'translateY(-2px)',
-                            }
-                          }}
-                        >
-                          Go to Dashboard
-                        </Button>
-                        {state.user?.role === 'SELLER' ? (
-                          <Button
-                            variant="outlined"
-                            size="large"
-                            onClick={() => navigate('/products/create')}
-                            sx={{ 
-                              borderColor: '#6366F1', 
-                              color: '#6366F1',
-                              borderWidth: 2,
-                              px: 4,
-                              py: 1.5,
-                              fontSize: '1.1rem',
-                              '&:hover': { 
-                                borderColor: '#818CF8',
-                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                                transform: 'translateY(-2px)',
-                              }
-                            }}
-                          >
-                            List Products
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outlined"
-                            size="large"
-                            onClick={() => navigate('/products')}
-                            sx={{ 
-                              borderColor: '#6366F1', 
-                              color: '#6366F1',
-                              borderWidth: 2,
-                              px: 4,
-                              py: 1.5,
-                              fontSize: '1.1rem',
-                              '&:hover': { 
-                                borderColor: '#818CF8',
-                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                                transform: 'translateY(-2px)',
-                              }
-                            }}
-                          >
-                            Browse Products
-                          </Button>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="contained"
-                          size="large"
-                          onClick={() => navigate('/register')}
-                          endIcon={<ArrowForward />}
-                          sx={{ 
-                            background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
-                            color: '#000000',
-                            fontWeight: 600,
-                            px: 4,
-                            py: 1.5,
-                            fontSize: '1.1rem',
-                            '&:hover': { 
-                              background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
-                              transform: 'translateY(-2px)',
-                            }
-                          }}
-                        >
-                          Get Started Free
-                        </Button>
+                    : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'
+                ) : userType === 'seller'
+                  ? 'List your surplus inventory and connect with buyers worldwide. Create auctions, set fixed prices, and grow your business.'
+                  : 'Discover quality textile materials from verified suppliers. Browse products, participate in auctions, and source materials efficiently.'}
+              </Typography>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.2 }}
+              >
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 6, justifyContent: 'center' }}>
+                  {state.isAuthenticated ? (
+                    <>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        onClick={() => navigate('/dashboard')}
+                        endIcon={<ArrowForward />}
+                        sx={{ 
+                          background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                          color: '#000000',
+                          fontWeight: 600,
+                          px: 4,
+                          py: 1.5,
+                          fontSize: '1.1rem',
+                          '&:hover': { 
+                            background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
+                            transform: 'translateY(-2px)',
+                          }
+                        }}
+                      >
+                        Go to Dashboard
+                      </Button>
+                      {state.user?.role === 'SELLER' ? (
                         <Button
                           variant="outlined"
                           size="large"
-                          onClick={() => navigate('/login')}
+                          onClick={() => navigate('/products/create')}
                           sx={{ 
                             borderColor: '#6366F1', 
                             color: '#6366F1',
@@ -487,68 +422,156 @@ const LandingPage: React.FC = () => {
                             }
                           }}
                         >
-                          Sign In
+                          List Products
                         </Button>
-                      </>
-                    )}
-                  </Stack>
-                </motion.div>
+                      ) : (
+                        <Button
+                          variant="outlined"
+                          size="large"
+                          onClick={() => navigate('/products')}
+                          sx={{ 
+                            borderColor: '#6366F1', 
+                            color: '#6366F1',
+                            borderWidth: 2,
+                            px: 4,
+                            py: 1.5,
+                            fontSize: '1.1rem',
+                            '&:hover': { 
+                              borderColor: '#818CF8',
+                              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                              transform: 'translateY(-2px)',
+                            }
+                          }}
+                        >
+                          Browse Products
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="contained"
+                        size="large"
+                        onClick={() => navigate('/register')}
+                        endIcon={<ArrowForward />}
+                        sx={{ 
+                          background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                          color: '#000000',
+                          fontWeight: 600,
+                          px: 4,
+                          py: 1.5,
+                          fontSize: '1.1rem',
+                          '&:hover': { 
+                            background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
+                            transform: 'translateY(-2px)',
+                          }
+                        }}
+                      >
+                        Get Started Free
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="large"
+                        onClick={() => navigate('/login')}
+                        sx={{ 
+                          borderColor: '#6366F1', 
+                          color: '#6366F1',
+                          borderWidth: 2,
+                          px: 4,
+                          py: 1.5,
+                          fontSize: '1.1rem',
+                          '&:hover': { 
+                            borderColor: '#818CF8',
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            transform: 'translateY(-2px)',
+                          }
+                        }}
+                      >
+                        Sign In
+                      </Button>
+                    </>
+                  )}
+                </Stack>
               </motion.div>
-            </Grid>
-            <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 }}
-                style={{ width: '100%' }}
+            </motion.div>
+          </Box>
+
+          {/* Video Section - Full Width */}
+          <Box sx={{ width: '100%' }}>
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.3 }}
+              style={{ width: '100%' }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: { xs: 300, sm: 400, md: 500, lg: 600 },
+                  width: '100%',
+                  maxWidth: { xs: '100%', md: '1200px', lg: '1400px' },
+                  mx: 'auto',
+                  background: 'rgba(99, 102, 241, 0.05)',
+                  borderRadius: 4,
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'linear-gradient(45deg, rgba(99, 102, 241, 0.1) 0%, transparent 50%, rgba(99, 102, 241, 0.1) 100%)',
+                    animation: 'gradient 3s ease infinite',
+                    zIndex: 1,
+                  },
+                }}
               >
                 <Box
+                  component="video"
+                  src="/videos/platform-preview.mp4"
+                  autoPlay
+                  loop
+                  muted={isVideoMuted}
+                  playsInline
                   sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    height: { xs: 250, md: 320 },
-                    background: 'rgba(99, 102, 241, 0.05)',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
                     borderRadius: 4,
-                    border: '1px solid rgba(99, 102, 241, 0.2)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'linear-gradient(45deg, rgba(99, 102, 241, 0.1) 0%, transparent 50%, rgba(99, 102, 241, 0.1) 100%)',
-                      animation: 'gradient 3s ease infinite',
-                    },
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    zIndex: 2,
                   }}
+                />
+                <IconButton
+                  onClick={() => setIsVideoMuted(!isVideoMuted)}
+                  sx={{
+                    position: 'absolute',
+                    top: 16,
+                    right: 16,
+                    zIndex: 3,
+                    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                    backdropFilter: 'blur(10px)',
+                    color: '#6366F1',
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                      transform: 'scale(1.1)',
+                    },
+                    transition: 'all 0.3s ease',
+                  }}
+                  aria-label={isVideoMuted ? 'Unmute video' : 'Mute video'}
                 >
-                  <Box sx={{ textAlign: 'center', zIndex: 1 }}>
-                    <motion.div
-                      animate={{ 
-                        y: [0, -10, 0],
-                      }}
-                      transition={{ 
-                        duration: 3,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                    >
-                      <Inventory sx={{ fontSize: 80, color: '#6366F1', mb: 2 }} />
-                    </motion.div>
-                    <Typography variant="h4" sx={{ color: '#6366F1', fontWeight: 600 }}>
-                      Platform Preview
-                    </Typography>
-                    <Typography variant="body1" sx={{ opacity: 0.7, mt: 1 }}>
-                      Interactive marketplace coming soon
-                    </Typography>
-                  </Box>
-                </Box>
-              </motion.div>
-            </Grid>
-          </Grid>
+                  {isVideoMuted ? <VolumeOff /> : <VolumeUp />}
+                </IconButton>
+              </Box>
+            </motion.div>
+          </Box>
         </Container>
       </Box>
 
@@ -575,19 +598,20 @@ const LandingPage: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                   >
-                    <Card
-                      sx={{
-                        background: 'rgba(99, 102, 241, 0.05)',
-                        border: '1px solid rgba(99, 102, 241, 0.2)',
-                        borderRadius: 3,
+                    <LiquidGlassCard
+                      variant="subtle"
+                      glassIntensity="low"
+                      customSx={{
+                        height: '100%',
+                        minHeight: 200,
                         p: 3,
                         textAlign: 'center',
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateY(-4px)',
-                          background: 'rgba(99, 102, 241, 0.1)',
-                          borderColor: 'rgba(99, 102, 241, 0.4)',
-                        },
+                        background: 'rgba(99, 102, 241, 0.05)',
+                        border: '1px solid rgba(99, 102, 241, 0.2)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
                       }}
                     >
                       <Box sx={{ mb: 2 }}>
@@ -628,7 +652,7 @@ const LandingPage: React.FC = () => {
                       >
                         {stat.label}
                       </Typography>
-                    </Card>
+                    </LiquidGlassCard>
                   </motion.div>
                 </Grid>
               ))}
@@ -689,54 +713,61 @@ const LandingPage: React.FC = () => {
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     viewport={{ once: true }}
                   >
-                    <Card 
-                      sx={{ 
-                        height: '100%', 
-                        background: 'rgba(17, 17, 17, 0.8)',
-                        backdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(99, 102, 241, 0.1)',
-                        borderRadius: 3,
+                    <LiquidGlassCard 
+                      variant="default"
+                      glassIntensity="medium"
+                      customSx={{ 
+                        height: '100%',
+                        minHeight: 280,
                         p: 3,
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateY(-8px)',
-                          borderColor: 'rgba(99, 102, 241, 0.3)',
-                          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-                        },
+                        display: 'flex',
+                        flexDirection: 'column',
                       }}
                     >
-                      <CardContent sx={{ textAlign: 'center', p: 0 }}>
-                        <motion.div
-                          whileHover={{ scale: 1.1, rotate: 5 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <Box sx={{ mb: 3 }}>
-                            {feature.icon}
-                          </Box>
-                        </motion.div>
-                        <Typography 
-                          variant="h5" 
-                          component="h3" 
-                          gutterBottom 
-                          sx={{ 
-                            fontWeight: 700,
-                            color: '#6366F1',
-                            mb: 2,
-                          }}
-                        >
-                          {feature.title}
-                        </Typography>
+                      <CardContent sx={{ 
+                        textAlign: 'center', 
+                        p: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        height: '100%',
+                      }}>
+                        <Box>
+                          <motion.div
+                            whileHover={{ scale: 1.1, rotate: 5 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Box sx={{ mb: 3 }}>
+                              {feature.icon}
+                            </Box>
+                          </motion.div>
+                          <Typography 
+                            variant="h5" 
+                            component="h3" 
+                            gutterBottom 
+                            sx={{ 
+                              fontWeight: 700,
+                              color: '#6366F1',
+                              mb: 2,
+                            }}
+                          >
+                            {feature.title}
+                          </Typography>
+                        </Box>
                         <Typography 
                           variant="body1" 
                           sx={{ 
                             color: 'rgba(255, 255, 255, 0.8)',
                             lineHeight: 1.6,
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
                         >
                           {feature.description}
                         </Typography>
                       </CardContent>
-                    </Card>
+                    </LiquidGlassCard>
                   </motion.div>
                 </Grid>
               ))}
@@ -796,38 +827,43 @@ const LandingPage: React.FC = () => {
                     transition={{ duration: 0.3, delay: index * 0.05 }}
                     viewport={{ once: true }}
                   >
-                    <Card 
-                      sx={{ 
-                        height: '100%', 
-                        background: 'rgba(17, 17, 17, 0.8)',
-                        backdropFilter: 'blur(20px)',
-                        border: '1px solid rgba(99, 102, 241, 0.1)',
-                        borderRadius: 3,
+                    <LiquidGlassCard 
+                      variant="default"
+                      glassIntensity="medium"
+                      customSx={{ 
+                        height: '100%',
+                        minHeight: 300,
                         p: 3,
-                        transition: 'all 0.3s ease',
-                        '&:hover': {
-                          transform: 'translateY(-4px)',
-                          borderColor: 'rgba(99, 102, 241, 0.3)',
-                        },
+                        display: 'flex',
+                        flexDirection: 'column',
                       }}
                     >
-                      <CardContent sx={{ p: 0 }}>
-                        <Box sx={{ display: 'flex', mb: 2 }}>
-                          {[...Array(testimonial.rating)].map((_, i) => (
-                            <Star key={i} sx={{ color: '#6366F1', fontSize: 20 }} />
-                          ))}
+                      <CardContent sx={{ 
+                        p: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        height: '100%',
+                      }}>
+                        <Box>
+                          <Box sx={{ display: 'flex', mb: 2 }}>
+                            {[...Array(testimonial.rating)].map((_, i) => (
+                              <Star key={i} sx={{ color: '#6366F1', fontSize: 20 }} />
+                            ))}
+                          </Box>
+                          <Typography 
+                            variant="body1" 
+                            sx={{ 
+                              color: 'rgba(255, 255, 255, 0.9)',
+                              lineHeight: 1.6,
+                              mb: 3,
+                              fontStyle: 'italic',
+                              flex: 1,
+                            }}
+                          >
+                            "{testimonial.content}"
+                          </Typography>
                         </Box>
-                        <Typography 
-                          variant="body1" 
-                          sx={{ 
-                            color: 'rgba(255, 255, 255, 0.9)',
-                            lineHeight: 1.6,
-                            mb: 3,
-                            fontStyle: 'italic',
-                          }}
-                        >
-                          "{testimonial.content}"
-                        </Typography>
                         <Box>
                           <Typography 
                             variant="h6" 
@@ -858,7 +894,7 @@ const LandingPage: React.FC = () => {
                           </Typography>
                         </Box>
                       </CardContent>
-                    </Card>
+                    </LiquidGlassCard>
                   </motion.div>
                 </Grid>
               ))}
@@ -947,288 +983,6 @@ const LandingPage: React.FC = () => {
               </motion.div>
             </Box>
           </motion.div>
-        </Container>
-      </Box>
-      <Box 
-        sx={{ 
-          background: 'linear-gradient(135deg, #0A0A0A 0%, #000000 100%)',
-          color: 'white', 
-          py: 8,
-          borderTop: '1px solid rgba(99, 102, 241, 0.1)',
-        }}
-      >
-        <Container maxWidth="lg">
-          <Grid container spacing={4} justifyContent="space-between" alignItems="flex-start">
-            <Grid item xs={12} md={4} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                viewport={{ once: true }}
-                style={{ width: '100%', maxWidth: '300px' }}
-              >
-                <Logo 
-                  size={35}
-                  color="#6366F1"
-                  textColor="#FFFFFF"
-                  variant="full"
-                  clickable={false}
-                />
-                <Typography 
-                  variant="body1" 
-                  sx={{ 
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    lineHeight: 1.6,
-                    mb: 3,
-                  }}
-                >
-                  The leading B2B marketplace for textile materials. Connecting mills with manufacturers worldwide.
-                </Typography>
-                <Stack direction="row" spacing={2}>
-                  <Chip 
-                    label="Trusted" 
-                    sx={{ 
-                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                      color: '#6366F1',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                    }} 
-                  />
-                  <Chip 
-                    label="Secure" 
-                    sx={{ 
-                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                      color: '#6366F1',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                    }} 
-                  />
-                  <Chip 
-                    label="Global" 
-                    sx={{ 
-                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                      color: '#6366F1',
-                      border: '1px solid rgba(99, 102, 241, 0.3)',
-                    }} 
-                  />
-                </Stack>
-              </motion.div>
-            </Grid>
-            <Grid item xs={12} md={4} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.05 }}
-                viewport={{ once: true }}
-                style={{ width: '100%', maxWidth: '300px' }}
-              >
-                <Typography 
-                  variant="h6" 
-                  gutterBottom 
-                  sx={{ 
-                    color: '#6366F1',
-                    fontWeight: 600,
-                    mb: 3,
-                    textAlign: 'center',
-                  }}
-                >
-                  Quick Links
-                </Typography>
-                <Stack spacing={2} sx={{ alignItems: 'center' }}>
-                  {state.isAuthenticated ? (
-                    <Button 
-                      color="inherit" 
-                      onClick={() => navigate('/products')}
-                      startIcon={<Inventory sx={{ fontSize: 20 }} />}
-                      sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        width: '100%',
-                        minHeight: 'auto',
-                        padding: '12px 16px',
-                        margin: 0,
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        '& .MuiButton-startIcon': {
-                          marginRight: '8px',
-                          marginLeft: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '20px',
-                          height: '20px',
-                        },
-                        '&:hover': {
-                          color: '#6366F1',
-                          backgroundColor: 'transparent',
-                        }
-                      }}
-                    >
-                      Browse Products
-                    </Button>
-                  ) : (
-                    <Button 
-                      color="inherit" 
-                      onClick={() => navigate('/login')}
-                      startIcon={<Person sx={{ fontSize: 20 }} />}
-                      sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        width: '100%',
-                        minHeight: 'auto',
-                        padding: '12px 16px',
-                        margin: 0,
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        boxShadow: 'none',
-                        '& .MuiButton-startIcon': {
-                          marginRight: '8px',
-                          marginLeft: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '20px',
-                          height: '20px',
-                        },
-                        '&:hover': {
-                          color: '#6366F1',
-                          backgroundColor: 'transparent',
-                          boxShadow: 'none',
-                        }
-                      }}
-                    >
-                      Sign In to Browse
-                    </Button>
-                  )}
-                  {state.isAuthenticated ? (
-                    <Button 
-                      color="inherit" 
-                      onClick={() => navigate('/auctions')}
-                      startIcon={<Gavel sx={{ fontSize: 20 }} />}
-                      sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        width: '100%',
-                        minHeight: 'auto',
-                        padding: '12px 16px',
-                        margin: 0,
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        '& .MuiButton-startIcon': {
-                          marginRight: '8px',
-                          marginLeft: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '20px',
-                          height: '20px',
-                        },
-                        '&:hover': {
-                          color: '#6366F1',
-                          backgroundColor: 'transparent',
-                        }
-                      }}
-                    >
-                      Live Auctions
-                    </Button>
-                  ) : (
-                    <Button 
-                      color="inherit" 
-                      onClick={() => navigate('/login')}
-                      startIcon={<Gavel sx={{ fontSize: 20 }} />}
-                      sx={{ 
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        textAlign: 'center',
-                        width: '100%',
-                        minHeight: 'auto',
-                        padding: '12px 16px',
-                        margin: 0,
-                        color: 'rgba(255, 255, 255, 0.8)',
-                        boxShadow: 'none',
-                        '& .MuiButton-startIcon': {
-                          marginRight: '8px',
-                          marginLeft: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '20px',
-                          height: '20px',
-                        },
-                        '&:hover': {
-                          color: '#6366F1',
-                          backgroundColor: 'transparent',
-                          boxShadow: 'none',
-                        }
-                      }}
-                    >
-                      Sign In for Auctions
-                    </Button>
-                  )}
-                </Stack>
-              </motion.div>
-            </Grid>
-            <Grid item xs={12} md={4} sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start' }}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                viewport={{ once: true }}
-                style={{ width: '100%', maxWidth: '300px' }}
-              >
-                <Typography 
-                  variant="h6" 
-                  gutterBottom 
-                  sx={{ 
-                    color: '#6366F1',
-                    fontWeight: 600,
-                    mb: 3,
-                  }}
-                >
-                  Support
-                </Typography>
-                <Stack spacing={2}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Message sx={{ color: '#6366F1', fontSize: 20 }} />
-                    <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                      support@stockent.com
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Support sx={{ color: '#6366F1', fontSize: 20 }} />
-                    <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                      +1 (555) 123-4567
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Shield sx={{ color: '#6366F1', fontSize: 20 }} />
-                    <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
-                      24/7 Security Monitoring
-                    </Typography>
-                  </Box>
-                </Stack>
-              </motion.div>
-            </Grid>
-          </Grid>
-          <Box 
-            sx={{ 
-              borderTop: '1px solid rgba(99, 102, 241, 0.2)', 
-              mt: 6, 
-              pt: 4,
-              textAlign: 'center',
-            }}
-          >
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                color: 'rgba(255, 255, 255, 0.5)',
-              }}
-            >
-              © 2024 StockENT. All rights reserved. Built with ❤️ for the textile industry.
-            </Typography>
-          </Box>
         </Container>
       </Box>
     </Box>

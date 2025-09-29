@@ -90,7 +90,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     // Calculate stats
     const totalProducts = userRole === 'SELLER' 
-      ? await prisma.product.count({ where: { sellerId: userId } })
+      ? await prisma.product.count({ where: { sellerId: userId, status: 'ACTIVE' } })
       : await prisma.product.count({ where: { status: 'ACTIVE' } });
 
     const activeAuctions = await prisma.auction.count({
@@ -100,12 +100,15 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     });
 
-    const totalMessages = await prisma.message.count({
+    const totalConversations = await prisma.conversation.count({
       where: {
         OR: [
-          { conversation: { buyerId: userId } },
-          { conversation: { sellerId: userId } }
-        ]
+          { buyerId: userId },
+          { sellerId: userId }
+        ],
+        messages: {
+          some: {} // Only count conversations that have at least one message
+        }
       }
     });
 
@@ -232,7 +235,7 @@ router.get('/', authenticateToken, async (req, res) => {
       stats: {
         totalProducts,
         activeAuctions,
-        totalMessages,
+        totalMessages: totalConversations,
         watchlistItems
       },
       recentProducts: userProducts.slice(0, 5),

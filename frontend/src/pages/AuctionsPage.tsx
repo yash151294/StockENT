@@ -34,23 +34,26 @@ import {
   Person,
   Visibility,
   Message,
-  Refresh,
   Search,
   Sort,
   AttachMoney,
+  Refresh,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { auctionsAPI } from '../services/api';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
+import { useRealtimeAuctions } from '../hooks/useRealtimeAuctions';
 import { getImageUrl } from '../utils/imageUtils';
 import PageHeader from '../components/PageHeader';
+import LiquidGlassCard from '../components/LiquidGlassCard';
 import { Auction } from '../types';
 
 
 // Memoized AuctionCard component for better performance
-const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatusColor, getTimeRemaining, getProgressPercentage }: {
+const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatusColor, getTimeRemaining, getProgressPercentage, currentUserId }: {
   auction: Auction;
   onView: (id: string) => void;
   onBid: (id: string) => void;
@@ -58,33 +61,27 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
   getAuctionStatusColor: (status: string) => any;
   getTimeRemaining: (endTime: string) => string;
   getProgressPercentage: (startTime: string, endTime: string) => number;
+  currentUserId?: string;
 }) => {
   const theme = useTheme();
   
   return (
-    <Card
-      sx={{
-        cursor: 'pointer',
-        background: 'rgba(17, 17, 17, 0.8)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(99, 102, 241, 0.1)',
-        borderRadius: 3,
-        transition: 'all 0.3s ease',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.2)',
+    <LiquidGlassCard
+      variant="default"
+      hoverEffect={true}
+      glassIntensity="medium"
+      borderGlow={true}
+      onClick={() => onView(auction.id)}
+      customSx={{
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        '&:hover': {
-          transform: 'translateY(-8px)',
-          borderColor: 'rgba(99, 102, 241, 0.3)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
-        },
+        cursor: 'pointer',
       }}
-      onClick={() => onView(auction.id)}
     >
       <CardMedia
         component="img"
-        height="200"
+        height="160"
         image={getImageUrl(auction.product?.images?.[0]?.imageUrl)}
         alt={auction.product?.title || 'Auction item'}
         sx={{ 
@@ -96,10 +93,10 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
           (e.target as HTMLImageElement).src = getImageUrl(null);
         }}
       />
-      <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
-        <Box display="flex" justifyContent="space-between" alignItems="start" mb={2}>
+      <CardContent sx={{ p: 2, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="start" mb={1.5}>
           <Typography 
-            variant="h6" 
+            variant="subtitle1" 
             component="h3" 
             noWrap 
             sx={{ 
@@ -107,6 +104,7 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
               mr: 1,
               color: 'white',
               fontWeight: 600,
+              fontSize: '0.95rem',
             }}
           >
             {auction.product?.title || 'Untitled Auction'}
@@ -120,6 +118,8 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
               backgroundColor: 'rgba(99, 102, 241, 0.1)',
               color: '#6366F1',
               border: '1px solid rgba(99, 102, 241, 0.3)',
+              fontSize: '0.75rem',
+              height: 24,
             }}
           />
         </Box>
@@ -128,32 +128,34 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
           variant="body2" 
           sx={{ 
             color: 'rgba(255, 255, 255, 0.7)',
-            mb: 2,
-            lineHeight: 1.5,
-            flex: 1,
+            mb: 1.5,
+            lineHeight: 1.4,
             display: '-webkit-box',
-            WebkitLineClamp: 3,
+            WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
+            fontSize: '0.85rem',
           }}
         >
-          {auction.product?.description?.substring(0, 100) || 'No description available'}...
+          {auction.product?.description?.substring(0, 80) || 'No description available'}...
         </Typography>
         
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1.5}>
           <Typography 
             variant="h6" 
             sx={{ 
               color: '#6366F1',
               fontWeight: 700,
+              fontSize: '1.1rem',
             }}
           >
             {formatPrice(auction.currentBid || auction.startingPrice || 0, auction.product?.currency || 'USD')}
           </Typography>
           <Typography 
-            variant="body2" 
+            variant="caption" 
             sx={{ 
               color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '0.75rem',
             }}
           >
             Current Bid
@@ -161,12 +163,12 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
         </Box>
 
         {auction.status === 'ACTIVE' && auction.endsAt && (
-          <Box mb={2}>
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.6)' }}>
+          <Box mb={1.5}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+              <Typography variant="caption" sx={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem' }}>
                 Time Remaining
               </Typography>
-              <Typography variant="body2" fontWeight="medium" sx={{ color: 'white' }}>
+              <Typography variant="caption" fontWeight="medium" sx={{ color: 'white', fontSize: '0.75rem' }}>
                 {getTimeRemaining(auction.endsAt)}
               </Typography>
             </Box>
@@ -176,27 +178,34 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
               color="primary"
               sx={{
                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                height: 4,
+                borderRadius: 2,
                 '& .MuiLinearProgress-bar': {
                   background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                  borderRadius: 2,
                 },
               }}
             />
           </Box>
         )}
         
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Typography 
-            variant="body2" 
+            variant="caption" 
+            noWrap
             sx={{ 
               color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '0.75rem',
+              maxWidth: '60%',
             }}
           >
             {auction.product?.seller?.companyName || 'Unknown Seller'}
           </Typography>
           <Typography 
-            variant="body2" 
+            variant="caption" 
             sx={{ 
               color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '0.75rem',
             }}
           >
             {auction.auctionType || 'ENGLISH'}
@@ -215,6 +224,10 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
             sx={{
               borderColor: 'rgba(99, 102, 241, 0.4)',
               color: '#6366F1',
+              fontSize: '0.75rem',
+              minWidth: 'auto',
+              px: 1.5,
+              py: 0.5,
               '&:hover': {
                 borderColor: '#6366F1',
                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
@@ -223,27 +236,34 @@ const AuctionCard = memo(({ auction, onView, onBid, formatPrice, getAuctionStatu
           >
             View
           </Button>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<Gavel />}
-            onClick={(e) => {
-              e.stopPropagation();
-              onBid(auction.id);
-            }}
-            sx={{
-              background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
-              color: '#000000',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
-              }
-            }}
-          >
-            Bid
-          </Button>
+          {/* Only show bid button if current user is not the seller */}
+          {currentUserId !== auction.product?.seller?.id && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<Gavel />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onBid(auction.id);
+              }}
+              sx={{
+                background: 'linear-gradient(135deg, #6366F1 0%, #818CF8 100%)',
+                color: '#000000',
+                fontSize: '0.75rem',
+                minWidth: 'auto',
+                px: 1.5,
+                py: 0.5,
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #818CF8 0%, #4F46E5 100%)',
+                }
+              }}
+            >
+              Bid
+            </Button>
+          )}
         </Box>
       </CardContent>
-    </Card>
+    </LiquidGlassCard>
   );
 });
 
@@ -251,10 +271,18 @@ AuctionCard.displayName = 'AuctionCard';
 
 const AuctionsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const { state: authState } = useAuth();
+  const { socket, isConnected } = useSocket();
+  const { invalidateAllAuctions, updateAuctionInCache, updateAuctionData } = useRealtimeAuctions();
+  const queryClient = useQueryClient();
   const isMobile = useMediaQuery(useTheme().breakpoints.down('sm'));
   const isTablet = useMediaQuery(useTheme().breakpoints.down('md'));
+  
+  // Check if we should show only user's auctions
+  const searchParams = new URLSearchParams(location.search);
+  const showMyAuctions = searchParams.get('my') === 'true';
   
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
@@ -266,12 +294,14 @@ const AuctionsPage: React.FC = () => {
     sortOrder: 'desc',
   });
 
-  // Local state to prevent flickering
+
+  // Local state to prevent flickering and enable instant tab switching
   const [displayData, setDisplayData] = useState<any>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [localAuctionsCache, setLocalAuctionsCache] = useState<{ [key: string]: Auction[] }>({});
   const previousDataRef = useRef<any>(null);
 
-  // Enhanced query with better error handling and debugging
+  // Enhanced query with improved throttling and error handling
   const { 
     data: auctions, 
     isLoading, 
@@ -280,18 +310,26 @@ const AuctionsPage: React.FC = () => {
     isFetching,
     isError 
   } = useQuery({
-    queryKey: ['auctions', activeTab, page, retryCount, searchQuery, filters],
+    queryKey: ['auctions', activeTab, page, retryCount, searchQuery, filters, showMyAuctions],
     queryFn: async () => {
-      console.log('🔄 Fetching auctions...', { activeTab, page, status: activeTab === 0 ? 'ACTIVE' : activeTab === 1 ? 'SCHEDULED' : 'ENDED' });
+      console.log('🔄 Fetching auctions...', { activeTab, page, status: activeTab === 0 ? 'ACTIVE' : activeTab === 1 ? 'SCHEDULED' : 'ENDED', showMyAuctions });
       
       try {
-        const response = await auctionsAPI.getAuctions({
-          page,
-          limit: isMobile ? 8 : isTablet ? 10 : 12,
-          status: activeTab === 0 ? 'ACTIVE' : activeTab === 1 ? 'SCHEDULED' : 'ENDED',
-          search: searchQuery,
-          ...filters,
-        });
+        const response = showMyAuctions 
+          ? await auctionsAPI.getMyAuctions({
+              page,
+              limit: isMobile ? 6 : isTablet ? 8 : 12,
+              status: activeTab === 0 ? 'ACTIVE' : activeTab === 1 ? 'SCHEDULED' : 'ENDED',
+              search: searchQuery,
+              ...filters,
+            })
+          : await auctionsAPI.getAuctions({
+              page,
+              limit: isMobile ? 6 : isTablet ? 8 : 12,
+              status: activeTab === 0 ? 'ACTIVE' : activeTab === 1 ? 'SCHEDULED' : 'ENDED',
+              search: searchQuery,
+              ...filters,
+            });
         
         console.log('✅ API Response received:', {
           success: response.data.success,
@@ -301,22 +339,64 @@ const AuctionsPage: React.FC = () => {
         });
         
         return response.data.data; // Extract the data from the Axios response
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ API Error:', error);
+        
+        // Handle authentication errors specifically
+        if (error.response?.status === 401) {
+          console.warn('🚫 Authentication failed, user may need to log in again');
+          // Don't throw the error immediately, let the auth context handle it
+          // Return empty data to prevent crashes
+          return { auctions: [], pagination: { page: 1, limit: 12, total: 0, totalPages: 0 } };
+        }
+        
         throw error;
       }
     },
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if ((error as any)?.response?.status === 401) {
+        return false;
+      }
+      // Retry up to 3 times for other errors
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => {
+      // Exponential backoff with jitter
+      const baseDelay = Math.min(1000 * Math.pow(2, attemptIndex), 30000);
+      const jitter = Math.random() * 1000;
+      return baseDelay + jitter;
+    },
+    staleTime: 20 * 1000, // 20 seconds - longer to reduce requests
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: true, // Refetch when window gains focus
     refetchOnMount: true,
+    refetchInterval: 60 * 1000, // Refetch every 60 seconds as backup
   });
 
-  // Effect to manage display data and prevent flickering
+  // Real-time auction updates are handled by useRealtimeAuctions hook
+
+  // Handle authentication failures
+  useEffect(() => {
+    if (error && (error as any)?.response?.status === 401) {
+      console.warn('🚫 Authentication failed, redirecting to login...');
+      navigate('/login', { replace: true });
+    }
+  }, [error, navigate]);
+
+  // Effect to manage display data, cache data, and prevent flickering
   useEffect(() => {
     if (auctions && !isLoading) {
+      // Cache the data for instant tab switching
+      const statusMap = ['ACTIVE', 'SCHEDULED', 'ENDED'];
+      const currentStatus = statusMap[activeTab];
+      const cacheKey = `${currentStatus}_${page}_${searchQuery}_${JSON.stringify(filters)}`;
+      
+      setLocalAuctionsCache(prev => ({
+        ...prev,
+        [cacheKey]: (auctions as any)?.auctions || []
+      }));
+      
       // If we have new data and it's not loading, update display data
       setDisplayData(auctions);
       setIsTransitioning(false);
@@ -330,7 +410,7 @@ const AuctionsPage: React.FC = () => {
       setDisplayData(null);
       setIsTransitioning(false);
     }
-  }, [auctions, isLoading]);
+  }, [auctions, isLoading, activeTab, page, searchQuery, filters]);
 
   // Effect to handle filter changes with smooth transitions
   useEffect(() => {
@@ -345,6 +425,54 @@ const AuctionsPage: React.FC = () => {
     }
   }, [auctions, isLoading, isTransitioning]);
 
+  // Real-time auction updates are now handled by useRealtimeAuctions hook
+  // This effect only handles display data updates when real-time events occur
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleAuctionUpdate = (data: any) => {
+      console.log('🔄 Real-time auction update received in AuctionsPage:', data);
+      
+      // Update current display data if the auction is visible
+      if (displayData?.auctions) {
+        const updatedAuctions = displayData.auctions.map((auction: Auction) => {
+          if (auction.id === data.auctionId) {
+            return {
+              ...auction,
+              status: data.status,
+              startTime: data.startTime || auction.startTime,
+              endTime: data.endTime || auction.endTime,
+            };
+          }
+          return auction;
+        });
+        
+        setDisplayData({
+          ...displayData,
+          auctions: updatedAuctions
+        });
+      }
+    };
+
+    // Only listen to specific events that need display updates
+    socket.on('auction_status_changed', handleAuctionUpdate);
+    socket.on('auction_started', handleAuctionUpdate);
+    socket.on('auction_ended', handleAuctionUpdate);
+
+    return () => {
+      socket.off('auction_status_changed', handleAuctionUpdate);
+      socket.off('auction_started', handleAuctionUpdate);
+      socket.off('auction_ended', handleAuctionUpdate);
+    };
+  }, [socket, isConnected, displayData]);
+
+  // Real-time updates are handled by socket events, no need for periodic sync
+  // This ensures true real-time updates without unnecessary API calls
+
+  // Clear cache when filters change to force fresh data
+  useEffect(() => {
+    setLocalAuctionsCache({});
+  }, [searchQuery, filters.currency, filters.sortBy, filters.sortOrder]);
 
   const handleSearch = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(event.target.value);
@@ -376,13 +504,13 @@ const AuctionsPage: React.FC = () => {
 
   // Memoized auctions data to prevent flickering
   const auctionsList = useMemo((): Auction[] => {
-    const auctions = displayData?.auctions || [];
-    return auctions;
+    const auctionsList = (displayData as any)?.auctions || [];
+    return auctionsList;
   }, [displayData]);
 
   // Memoized pagination data
   const pagination = useMemo(() => {
-    return displayData?.pagination || null;
+    return (displayData as any)?.pagination || null;
   }, [displayData]);
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
@@ -455,6 +583,76 @@ const AuctionsPage: React.FC = () => {
     refetch();
   };
 
+  // Smooth refresh handler that prevents flickering
+  const handleRefresh = useCallback(() => {
+    console.log('🔄 Manual refresh triggered');
+    
+    // Don't clear display data, just refetch in background
+    refetch({
+      throwOnError: false, // Don't throw errors during background refresh
+    });
+  }, [refetch]);
+
+  // Function to instantly filter auctions by status for instant tab switching
+  const getFilteredAuctionsByStatus = useCallback((auctions: Auction[], status: string) => {
+    const now = new Date();
+    return auctions.filter(auction => {
+      switch (status) {
+        case 'ACTIVE':
+          return auction.status === 'ACTIVE' && 
+                 auction.endsAt && 
+                 new Date(auction.endsAt) > now;
+        case 'SCHEDULED':
+          return auction.status === 'SCHEDULED' || 
+                 (auction.status === 'ACTIVE' && 
+                  auction.startsAt && 
+                  new Date(auction.startsAt) > now);
+        case 'ENDED':
+          return auction.status === 'ENDED' || 
+                 (auction.status === 'ACTIVE' && 
+                  auction.endsAt && 
+                  new Date(auction.endsAt) <= now);
+        default:
+          return true;
+      }
+    });
+  }, []);
+
+  // Enhanced tab change handler with instant switching
+  const handleTabChange = useCallback((event: React.SyntheticEvent, newValue: number) => {
+    const statusMap = ['ACTIVE', 'SCHEDULED', 'ENDED'];
+    const newStatus = statusMap[newValue];
+    
+    // Check if we have cached data for instant switching
+    const cacheKey = `${newStatus}_${page}_${searchQuery}_${JSON.stringify(filters)}`;
+    if (localAuctionsCache[cacheKey]) {
+      console.log('🚀 Instant tab switch using cached data for:', newStatus);
+      setActiveTab(newValue);
+      
+      // Apply local filtering for instant results
+      const allAuctions = displayData?.auctions || [];
+      const filteredAuctions = getFilteredAuctionsByStatus(allAuctions, newStatus);
+      
+      if (filteredAuctions.length > 0) {
+        setDisplayData({
+          ...displayData,
+          auctions: filteredAuctions,
+          pagination: {
+            ...displayData?.pagination,
+            total: filteredAuctions.length,
+            pages: Math.ceil(filteredAuctions.length / (isMobile ? 6 : isTablet ? 8 : 12))
+          }
+        });
+        return;
+      }
+    }
+    
+    // Fallback to normal tab switching if no cache
+    console.log('🔄 Normal tab switch - fetching new data for:', newStatus);
+    setActiveTab(newValue);
+    setIsTransitioning(true);
+  }, [localAuctionsCache, page, searchQuery, filters, displayData, getFilteredAuctionsByStatus, isMobile, isTablet]);
+
   // Error handling with retry option
   if (error) {
     console.error('AuctionsPage error:', error);
@@ -467,13 +665,15 @@ const AuctionsPage: React.FC = () => {
         justifyContent: 'center',
         p: 4
       }}>
-        <Card sx={{ 
-          maxWidth: 500, 
-          p: 4,
-          background: 'rgba(17, 17, 17, 0.8)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(99, 102, 241, 0.1)',
-        }}>
+        <LiquidGlassCard
+          variant="default"
+          hoverEffect={false}
+          glassIntensity="medium"
+          customSx={{
+            maxWidth: 500, 
+            p: 4,
+          }}
+        >
           <Alert 
             severity="error" 
             sx={{ mb: 3 }}
@@ -499,7 +699,7 @@ const AuctionsPage: React.FC = () => {
           >
             Refresh Page
           </Button>
-        </Card>
+        </LiquidGlassCard>
       </Box>
     );
   }
@@ -512,124 +712,31 @@ const AuctionsPage: React.FC = () => {
     }}>
       {/* Header */}
       <PageHeader
-        title="Auctions"
-        subtitle="Participate in live auctions for textile materials"
+        title={showMyAuctions ? "My Auctions" : "Auctions"}
+        subtitle={showMyAuctions 
+          ? "Manage your auction listings and track their performance"
+          : "Participate in live auctions for textile materials"
+        }
       />
 
-      {/* Tabs with Glassmorphism */}
-      <Box sx={{ 
-        mb: 4, 
-        p: 3, 
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'linear-gradient(135deg, rgba(17, 17, 17, 0.8) 0%, rgba(26, 26, 26, 0.6) 100%)',
-        borderRadius: 3,
-        border: '1px solid rgba(99, 102, 241, 0.2)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(45deg, rgba(99, 102, 241, 0.1) 0%, transparent 25%, transparent 75%, rgba(99, 102, 241, 0.1) 100%)',
-          animation: 'liquidFlow 8s ease-in-out infinite',
-          pointerEvents: 'none',
-          zIndex: 1,
-        },
-        '& > *': {
-          position: 'relative',
-          zIndex: 2,
-        },
-      }}>
-        <Tabs 
-          value={activeTab} 
-          onChange={(e, newValue) => setActiveTab(newValue)}
-          sx={{
-            width: '100%',
-            minHeight: 'auto',
-            '& .MuiTabs-flexContainer': {
-              flexWrap: 'wrap',
-            },
-            '& .MuiTab-root': {
-              minWidth: 'auto',
-              flex: 1,
-              maxWidth: 'none',
-              color: 'rgba(255, 255, 255, 0.7)',
-              '&.Mui-selected': {
-                color: '#6366F1',
-              },
-            },
-            '& .MuiTabs-indicator': {
-              backgroundColor: '#6366F1',
-            },
-          }}
-        >
-          <Tab label="Live Auctions" />
-          <Tab label="Upcoming" />
-          <Tab label="Ended" />
-        </Tabs>
-      </Box>
 
       {/* Search and Filters - Liquid Glass Style */}
-      <Box sx={{ 
-        mb: 4, 
-        p: 3, 
-        position: 'relative',
-        overflow: 'hidden',
-        background: 'linear-gradient(135deg, rgba(17, 17, 17, 0.8) 0%, rgba(26, 26, 26, 0.6) 100%)',
-        borderRadius: 3,
-        border: '1px solid rgba(99, 102, 241, 0.2)',
-        backdropFilter: 'blur(20px)',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(45deg, rgba(99, 102, 241, 0.1) 0%, transparent 25%, transparent 75%, rgba(99, 102, 241, 0.1) 100%)',
-          animation: 'liquidFlow 8s ease-in-out infinite',
-          pointerEvents: 'none',
-          zIndex: 1,
-        },
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'radial-gradient(circle at 30% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%)',
-          animation: 'liquidFlow 12s ease-in-out infinite reverse',
-          pointerEvents: 'none',
-          zIndex: 1,
-        },
-        '& > *': {
-          position: 'relative',
-          zIndex: 2,
-        },
-        '&:hover': {
-          '&::before': {
-            animationDuration: '4s',
-          },
-          '&::after': {
-            animationDuration: '6s',
-          },
-        },
-      }}>
-        
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 3, 
-          alignItems: 'center', 
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          width: '100%'
-        }}>
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 } }}>
+        <LiquidGlassCard 
+          variant="default" 
+          hoverEffect={true} 
+          glassIntensity="high" 
+          customSx={{ mb: 4 }}
+        >
+          <CardContent sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 3, 
+            alignItems: 'center', 
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            width: '100%'
+          }}>
           {/* Search Input */}
           <TextField
             placeholder="Search auctions..."
@@ -783,11 +890,104 @@ const AuctionsPage: React.FC = () => {
           >
             {filters.sortOrder === 'desc' ? '↓' : '↑'}
           </Button>
+          
+          {/* Refresh Button */}
+          <Button
+            variant="outlined"
+            onClick={handleRefresh}
+            disabled={isFetching}
+            size="small"
+            sx={{
+              minWidth: 48,
+              width: isMobile ? '100%' : 48,
+              height: 40,
+              mb: isMobile ? 2 : 0,
+              borderColor: 'rgba(99, 102, 241, 0.4)',
+              color: '#6366F1',
+              opacity: isFetching ? 0.6 : 1,
+              '&:hover': {
+                borderColor: '#6366F1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                transform: isFetching ? 'none' : 'rotate(180deg)',
+                transition: 'transform 0.3s ease',
+              },
+              '&:disabled': {
+                borderColor: 'rgba(99, 102, 241, 0.2)',
+                color: 'rgba(99, 102, 241, 0.4)',
+              }
+            }}
+            title={isFetching ? "Refreshing..." : "Refresh auctions"}
+          >
+            <Refresh 
+              sx={{ 
+                animation: isFetching ? 'spin 1s linear infinite' : 'none',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(360deg)' },
+                }
+              }} 
+            />
+          </Button>
+          </Box>
+        </CardContent>
+        </LiquidGlassCard>
+      </Box>
+
+      {/* Compact Tabs */}
+      <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, mb: 2 }}>
+        <Box sx={{
+          background: 'rgba(17, 17, 17, 0.8)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(99, 102, 241, 0.2)',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}>
+          <Tabs 
+            value={activeTab} 
+            onChange={handleTabChange}
+            sx={{
+              width: '100%',
+              minHeight: 'auto',
+              '& .MuiTabs-flexContainer': {
+                flexWrap: 'nowrap',
+                gap: 0,
+              },
+              '& .MuiTab-root': {
+                minWidth: 'auto',
+                flex: 1,
+                maxWidth: 'none',
+                color: 'rgba(255, 255, 255, 0.7)',
+                padding: '16px 8px',
+                minHeight: '56px',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+                textTransform: 'none',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  color: '#6366F1',
+                  backgroundColor: 'rgba(99, 102, 241, 0.05)',
+                },
+                '&.Mui-selected': {
+                  color: '#6366F1',
+                  backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                },
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#6366F1',
+                height: 3,
+                borderRadius: '2px 2px 0 0',
+              },
+            }}
+          >
+            <Tab label="Live Auctions" />
+            <Tab label="Upcoming" />
+            <Tab label="Ended" />
+          </Tabs>
         </Box>
       </Box>
 
       {/* Auctions Grid */}
-      <Box sx={{ width: '100%', overflow: 'auto', position: 'relative', px: { xs: 2, md: 0 } }}>
+      <Box sx={{ width: '100%', position: 'relative', px: { xs: 2, sm: 3, md: 4 } }}>
         {/* Loading indicator for background fetching */}
         {(isFetching || isTransitioning) && !showLoading && (
           <Box
@@ -833,31 +1033,33 @@ const AuctionsPage: React.FC = () => {
         </Backdrop>
         
         {showLoading ? (
-          <Grid container spacing={3}>
+          <Grid container spacing={2}>
             {Array.from({ length: 12 }).map((_, index) => (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
-                <Card sx={{
-                  background: 'rgba(17, 17, 17, 0.8)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(99, 102, 241, 0.1)',
-                  borderRadius: 3,
-                }}>
-                  <Skeleton variant="rectangular" height={200} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
-                  <CardContent>
-                    <Skeleton variant="text" height={24} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+              <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={index}>
+                <LiquidGlassCard
+                  variant="default"
+                  hoverEffect={false}
+                  glassIntensity="medium"
+                  customSx={{
+                    borderRadius: 3,
+                  }}
+                >
+                  <Skeleton variant="rectangular" height={160} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                  <CardContent sx={{ p: 2 }}>
                     <Skeleton variant="text" height={20} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                     <Skeleton variant="text" height={16} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
+                    <Skeleton variant="text" height={14} sx={{ bgcolor: 'rgba(99, 102, 241, 0.1)' }} />
                   </CardContent>
-                </Card>
+                </LiquidGlassCard>
               </Grid>
             ))}
           </Grid>
         ) : (
           <Fade in={!showLoading && !isTransitioning} timeout={300}>
             <Box>
-              <Grid container spacing={3}>
+              <Grid container spacing={2}>
                 {auctionsList.map((auction: Auction) => (
-                  <Grid item xs={12} sm={6} md={4} lg={3} key={auction.id}>
+                  <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={auction.id}>
                     <AuctionCard
                       auction={auction}
                       onView={handleViewAuction}
@@ -866,6 +1068,7 @@ const AuctionsPage: React.FC = () => {
                       getAuctionStatusColor={getAuctionStatusColor}
                       getTimeRemaining={getTimeRemaining}
                       getProgressPercentage={getProgressPercentage}
+                      currentUserId={authState.user?.id}
                     />
                   </Grid>
                 ))}

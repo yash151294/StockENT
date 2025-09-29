@@ -1,12 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import { messagesAPI } from '../services/api';
+import { useEffect } from 'react';
 
 /**
  * Custom hook to manage conversation state and check if user has conversations
  */
 export const useConversations = () => {
   const { state } = useAuth();
+  const { socket } = useSocket();
   const queryClient = useQueryClient();
 
   // Query to get conversation count
@@ -39,12 +42,14 @@ export const useConversations = () => {
     }))
   });
   
-  // Only include conversations that have actual messages (conversations that have been started)
-  const conversations = allConversations.filter((conv: any) => 
-    conv._count?.messages && conv._count.messages > 0
-  );
+  // Include conversations that have messages OR are recently created (within last 5 minutes)
+  const conversations = allConversations.filter((conv: any) => {
+    const hasMessages = conv._count?.messages && conv._count.messages > 0;
+    const isRecent = conv.createdAt && (Date.now() - new Date(conv.createdAt).getTime()) < 5 * 60 * 1000; // 5 minutes
+    return hasMessages || isRecent;
+  });
   
-  // Only show conversations that have actual messages (conversations that have been started)
+  // Show conversations that have messages or are recently created
   const hasConversations = conversations.length > 0;
   const conversationCount = conversations.length;
 
@@ -60,6 +65,57 @@ export const useConversations = () => {
     })),
     timestamp: new Date().toISOString()
   });
+
+  // Real-time socket event handling for conversations
+  useEffect(() => {
+    if (socket) {
+      const handleNewMessage = (message: any) => {
+        console.log('📨 New message received in useConversations:', message);
+        // Refresh conversations to update last message and unread count
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      };
+
+      const handleMessageNotification = (data: any) => {
+        console.log('🔔 Message notification in useConversations:', data);
+        // Refresh conversations to update unread count
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        // Note: Notification handling is done by NotificationContext
+      };
+
+      const handleMessageDeleted = (data: any) => {
+        console.log('🗑️ Message deleted in useConversations:', data);
+        // Refresh conversations to update message count
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      };
+
+      const handleConversationClosed = (data: any) => {
+        console.log('🔒 Conversation closed in useConversations:', data);
+        // Refresh conversations to update conversation status
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      };
+
+      const handleConversationCreated = (conversation: any) => {
+        console.log('✨ New conversation created in useConversations:', conversation);
+        // Refresh conversations to include new conversation
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      };
+
+      // Listen to socket events
+      socket.on('message_received', handleNewMessage);
+      socket.on('new_message_notification', handleMessageNotification);
+      socket.on('message_deleted', handleMessageDeleted);
+      socket.on('conversation_closed', handleConversationClosed);
+      socket.on('conversation_created', handleConversationCreated);
+
+      return () => {
+        socket.off('message_received', handleNewMessage);
+        socket.off('new_message_notification', handleMessageNotification);
+        socket.off('message_deleted', handleMessageDeleted);
+        socket.off('conversation_closed', handleConversationClosed);
+        socket.off('conversation_created', handleConversationCreated);
+      };
+    }
+  }, [socket, queryClient]);
 
   // Function to completely refresh conversation data
   const refreshConversations = async () => {
