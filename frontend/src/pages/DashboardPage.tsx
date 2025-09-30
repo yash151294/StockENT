@@ -33,7 +33,7 @@ import NotificationDebug from '../components/NotificationDebug';
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { state, clearJustLoggedIn } = useAuth();
-  const { hasConversations, isLoading: conversationsLoading, error: conversationsError } = useConversations();
+  const { hasConversations, conversationCount, isLoading: conversationsLoading, error: conversationsError } = useConversations();
 
   // Debug logging for dashboard
   console.log('🔍 Dashboard Debug:', {
@@ -170,7 +170,7 @@ const DashboardPage: React.FC = () => {
     },
     {
       title: 'Messages',
-      value: loading ? '...' : dashboardData.stats?.totalMessages?.toString() || '0',
+      value: conversationsLoading ? '...' : conversationCount?.toString() || '0',
       icon: <Message />,
       color: 'success',
       action: () => navigate('/messages'),
@@ -199,7 +199,7 @@ const DashboardPage: React.FC = () => {
     },
     {
       title: 'Messages',
-      value: loading ? '...' : dashboardData.stats?.totalMessages?.toString() || '0',
+      value: conversationsLoading ? '...' : conversationCount?.toString() || '0',
       icon: <Message />,
       color: 'success',
       action: () => navigate('/messages'),
