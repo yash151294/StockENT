@@ -298,6 +298,7 @@ const DashboardPage: React.FC = () => {
       icon: <Visibility />,
       action: () => navigate('/profile?tab=watchlist'),
       color: 'success',
+      hideForRole: 'SELLER',
     },
   ];
 
@@ -313,7 +314,7 @@ const DashboardPage: React.FC = () => {
   // Combine actions based on role and conversation status
   const quickActions = state.user?.role === 'SELLER' 
     ? [...sellerActions, ...(hasConversations ? [messagesAction] : [])]
-    : [...buyerActions, ...(hasConversations ? [messagesAction] : [])];
+    : [...buyerActions.filter(action => !action.hideForRole || action.hideForRole !== 'SELLER'), ...(hasConversations ? [messagesAction] : [])];
 
   return (
     <Box sx={{ 
@@ -332,37 +333,6 @@ const DashboardPage: React.FC = () => {
 
       {/* Alert Messages Container */}
       <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, position: 'relative', zIndex: 10 }}>
-        {/* Welcome message for newly logged in users */}
-        {state.justLoggedIn && state.isAuthenticated && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Alert 
-              severity="success" 
-              sx={{ 
-                mb: 4,
-                background: 'rgba(99, 102, 241, 0.1)',
-                border: '1px solid rgba(99, 102, 241, 0.3)',
-                color: '#6366F1',
-                position: 'relative',
-                zIndex: 10,
-              }}
-              onClose={() => clearJustLoggedIn()}
-            >
-              <Typography variant="h6" gutterBottom sx={{ color: '#6366F1' }}>
-                Welcome back, {getDisplayName()}!
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                {state.loginMethod === 'google' 
-                  ? "You have successfully signed in with Google. Here's what's happening with your account today."
-                  : "You have successfully signed in. Here's what's happening with your account today."
-                }
-              </Typography>
-            </Alert>
-          </motion.div>
-        )}
 
         {/* Error message */}
         {error && (

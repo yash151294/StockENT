@@ -282,7 +282,7 @@ const AuctionsPage: React.FC = () => {
   
   // Check if we should show only user's auctions
   const searchParams = new URLSearchParams(location.search);
-  const showMyAuctions = searchParams.get('my') === 'true';
+  const showMyAuctions = searchParams.get('my') === 'true' || authState.user?.role === 'SELLER';
   
   const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
@@ -714,7 +714,9 @@ const AuctionsPage: React.FC = () => {
       <PageHeader
         title={showMyAuctions ? "My Auctions" : "Auctions"}
         subtitle={showMyAuctions 
-          ? "Manage your auction listings and track their performance"
+          ? authState.user?.role === 'SELLER' 
+            ? "View and manage your auction listings"
+            : "Manage your auction listings and track their performance"
           : "Participate in live auctions for textile materials"
         }
       />

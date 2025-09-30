@@ -34,7 +34,6 @@ import OAuthCallbackPage from './pages/OAuthCallbackPage';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoadingSpinner from './components/LoadingSpinner';
-import FirstLoginWelcome from './components/FirstLoginWelcome';
 
 // Create modern dark theme
 const theme = createTheme({
@@ -289,7 +288,6 @@ function App() {
                     v7_relativeSplatPath: true,
                   }}
                 >
-                  <FirstLoginWelcome />
                   <Routes>
                     {/* Public routes */}
                     <Route path="/" element={

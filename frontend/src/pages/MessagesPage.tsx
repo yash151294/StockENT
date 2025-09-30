@@ -66,7 +66,7 @@ const MessagesPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { state } = useAuth();
   const { socket, isConnected } = useSocket();
-  const { showSuccess, showWarning, showError, markMessageNotificationsAsRead } = useNotification();
+  const { showSuccess, showWarning, showError, markMessageNotificationsAsRead, clearMessageNotificationsForConversation, setMessagesPageActive } = useNotification();
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +88,18 @@ const MessagesPage: React.FC = () => {
   // Debug logging
   console.log('MessagesPage URL params:', { conversationId, productId, sellerId });
 
+  // Register MessagesPage as active when component mounts
+  useEffect(() => {
+    console.log('📱 MessagesPage mounted - registering as active');
+    setMessagesPageActive(true);
+    
+    // Unregister when component unmounts
+    return () => {
+      console.log('📱 MessagesPage unmounted - unregistering as active');
+      setMessagesPageActive(false);
+    };
+  }, [setMessagesPageActive]);
+
   // Fetch product and seller data for new conversation
   const { data: productData } = useQuery({
     queryKey: ['product', productId],
@@ -104,11 +116,36 @@ const MessagesPage: React.FC = () => {
     error: conversationsError,
     refetch: refetchConversations
   } = useQuery({
-    queryKey: ['conversations'],
+    queryKey: ['conversations', state.user?.role],
     queryFn: () => messagesAPI.getConversations(),
     retry: 2,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled: !!state.user, // Only fetch when user is available
   });
+
+  // Clear conversations when role changes to force fresh data
+  useEffect(() => {
+    const handleRoleChange = (event: CustomEvent) => {
+      const { newRole, userId } = event.detail;
+      if (userId === state.user?.id) {
+        console.log('🔄 Role change event received, invalidating queries for role:', newRole);
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+        queryClient.invalidateQueries({ queryKey: ['unread-notifications'] });
+        
+        // Clear current conversation if viewing one
+        if (selectedConversationId) {
+          setSelectedConversationId(null);
+        }
+      }
+    };
+
+    window.addEventListener('user:roleChanged', handleRoleChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('user:roleChanged', handleRoleChange as EventListener);
+    };
+  }, [state.user?.id, queryClient, selectedConversationId]);
 
   const { 
     data: messages, 
@@ -230,11 +267,16 @@ const MessagesPage: React.FC = () => {
       console.log('📖 Marking conversation as read:', conversationId);
       return messagesAPI.markConversationAsRead(conversationId);
     },
-    onSuccess: () => {
-      console.log('✅ Conversation marked as read successfully');
+    onSuccess: (data, conversationId) => {
+      console.log('✅ Conversation marked as read successfully:', conversationId);
+      // Invalidate all relevant queries to refresh unread counts
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
       queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+      
+      // Clear message notifications for this conversation to reset unread counter
+      clearMessageNotificationsForConversation(conversationId);
     },
     onError: (error: any) => {
       console.error('❌ Mark conversation as read error:', error);
@@ -262,10 +304,12 @@ const MessagesPage: React.FC = () => {
       setSelectedConversation(conversationId);
       // Mark conversation as read when opened from URL
       markConversationAsReadMutation.mutate(conversationId);
-      // Mark message notifications as read for this conversation
-      markMessageNotificationsAsRead(conversationId);
+      // Clear message notifications for this conversation to reset unread counter
+      clearMessageNotificationsForConversation(conversationId);
+      // Force refresh of conversations to update unread counts immediately
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
     }
-  }, [conversationId, selectedConversation]);
+  }, [conversationId, selectedConversation, clearMessageNotificationsForConversation, queryClient]);
 
   // Socket connection status handling
   useEffect(() => {
@@ -292,20 +336,35 @@ const MessagesPage: React.FC = () => {
         // If this message is for the currently selected conversation, refresh messages
         if (message.conversationId === selectedConversation) {
           queryClient.invalidateQueries({ queryKey: ['messages', selectedConversation] });
+          
+          // Automatically mark conversation as read when new message arrives in active conversation
+          if (message.senderId !== state.user?.id && selectedConversation) {
+            markConversationAsReadMutation.mutate(selectedConversation);
+            clearMessageNotificationsForConversation(selectedConversation);
+            console.log('💬 New message in active conversation - auto-marking as read');
+          }
+          
+          // Don't refresh conversations list for the selected conversation to prevent unread count increase
+          console.log('💬 New message in active conversation - not updating unread count');
+        } else {
+          // Only refresh conversations list for other conversations to update unread count
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
         }
-        
-        // Always refresh conversations list to update last message preview
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
         
         // Note: Notifications are handled by NotificationContext and MessageNotification components
         // No need to show additional notifications here to avoid duplicates
       };
 
       const handleMessageNotification = (data: any) => {
-        // Refresh conversations list to show unread count
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+        // Only refresh conversations list if it's not for the currently selected conversation
+        if (data.conversationId !== selectedConversation) {
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+          console.log('🔔 Message notification for different conversation - updating unread count');
+        } else {
+          console.log('🔔 Message notification for active conversation - not updating unread count');
+        }
         
         // Note: Notifications are handled by NotificationContext and MessageNotification components
         // No need to show additional notifications here to avoid duplicates
@@ -343,7 +402,7 @@ const MessagesPage: React.FC = () => {
         socket.off('conversation_created', handleConversationCreated);
       };
     }
-  }, [socket, isConnected, selectedConversation, queryClient, state.user?.id, showSuccess, showWarning, navigate]);
+  }, [socket, isConnected, selectedConversation, queryClient, state.user?.id, showSuccess, showWarning, navigate, markConversationAsReadMutation, clearMessageNotificationsForConversation]);
 
   // Auto-scroll to bottom when new messages arrive or when sending a message
   useEffect(() => {
@@ -354,14 +413,18 @@ const MessagesPage: React.FC = () => {
 
   // Event handlers
   const handleConversationSelect = (conversationId: string) => {
+    console.log('💬 Selecting conversation:', conversationId);
     setSelectedConversation(conversationId);
     navigate(`/messages?conversation=${conversationId}`, { replace: true });
     
     // Mark conversation as read when opened
     markConversationAsReadMutation.mutate(conversationId);
     
-    // Mark message notifications as read for this conversation
-    markMessageNotificationsAsRead(conversationId);
+    // Clear message notifications for this conversation to reset unread counter
+    clearMessageNotificationsForConversation(conversationId);
+    
+    // Force refresh of conversations to update unread counts immediately
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
   };
 
   const handleSendMessage = () => {
@@ -491,18 +554,38 @@ const MessagesPage: React.FC = () => {
   };
 
   const getUnreadCount = (conversation: Conversation) => {
+    // If this conversation is currently selected, don't show unread count
+    // as the user is actively viewing it
+    if (selectedConversation === conversation.id) {
+      return 0;
+    }
+    
     // Use the unreadCount field from backend if available, otherwise fallback to 0
     return conversation.unreadCount || 0;
   };
 
   const getOtherUser = (conversation: Conversation) => {
     if (!state.user) return null;
-    return state.user.id === conversation.buyerId ? conversation.seller : conversation.buyer;
+    // Role-based logic:
+    // - For SELLER: show buyer information (since they see conversations initiated by buyers)
+    // - For BUYER: show seller information (since they see conversations they initiated)
+    if (state.user.role === 'SELLER') {
+      return conversation.buyer;
+    } else {
+      return conversation.seller;
+    }
   };
 
   const getOtherUserAlias = (conversation: Conversation) => {
     if (!state.user) return '';
-    return state.user.id === conversation.buyerId ? conversation.sellerAlias : conversation.buyerAlias;
+    // Role-based logic:
+    // - For SELLER: show buyer alias (since they see conversations initiated by buyers)
+    // - For BUYER: show seller alias (since they see conversations they initiated)
+    if (state.user.role === 'SELLER') {
+      return conversation.buyerAlias;
+    } else {
+      return conversation.sellerAlias;
+    }
   };
 
 
@@ -560,7 +643,10 @@ const MessagesPage: React.FC = () => {
       {/* Header */}
       <PageHeader
         title="Messages"
-        subtitle="Communicate with buyers and sellers"
+        subtitle={state.user?.role === 'SELLER' 
+          ? "View inquiries and communicate with potential buyers"
+          : "Communicate with sellers about products you're interested in"
+        }
       />
 
 
@@ -709,14 +795,17 @@ const MessagesPage: React.FC = () => {
                               
                               <ListItemText
                                 primary={
-                                  <Box display="flex" alignItems="center" gap={1}>
+                                  <React.Fragment>
                                     <Typography
                                       variant="subtitle1"
                                       noWrap
+                                      component="span"
                                       sx={{
                                         color: 'white',
                                         fontWeight: isSelected ? 600 : 500,
-                                        flex: 1,
+                                        display: 'inline-block',
+                                        maxWidth: '60%',
+                                        verticalAlign: 'middle',
                                       }}
                                     >
                                       {otherUser?.companyName || 'Unknown Company'}
@@ -728,6 +817,7 @@ const MessagesPage: React.FC = () => {
                                         fontSize: '0.7rem',
                                         height: 20,
                                         minWidth: 'auto',
+                                        float: 'right',
                                         backgroundColor: 
                                           conversation.status === 'ACTIVE' ? 'rgba(34, 197, 94, 0.2)' :
                                           conversation.status === 'ARCHIVED' ? 'rgba(156, 163, 175, 0.2)' :
@@ -748,42 +838,54 @@ const MessagesPage: React.FC = () => {
                                         },
                                       }}
                                     />
-                                  </Box>
+                                  </React.Fragment>
                                 }
                                 secondary={
-                                  <Box>
+                                  <React.Fragment>
                                     <Typography
                                       variant="body2"
                                       noWrap
+                                      component="span"
                                       sx={{
                                         color: 'rgba(255, 255, 255, 0.7)',
+                                        display: 'block',
                                         mb: 0.5,
                                       }}
                                     >
                           {conversation.product?.title || 'Unknown Product'}
                         </Typography>
-                                    <Box display="flex" justifyContent="space-between" alignItems="center">
-                                      <Typography
-                                        variant="caption"
-                                        noWrap
-                                        sx={{
-                                          color: 'rgba(255, 255, 255, 0.6)',
-                                          flex: 1,
-                                        }}
-                                      >
-                                        {conversation.messages?.[0]?.content?.substring(0, 50) || 'No messages yet'}...
+                                    <Typography
+                                      variant="caption"
+                                      component="span"
+                                      sx={{
+                                        color: 'rgba(255, 255, 255, 0.6)',
+                                        display: 'inline-block',
+                                        maxWidth: '70%',
+                                      }}
+                                    >
+                                      {(() => {
+                                        const lastMessage = conversation.messages?.[0];
+                                        console.log('🔍 Conversation list last message:', {
+                                          conversationId: conversation.id,
+                                          lastMessage: lastMessage,
+                                          content: lastMessage?.content,
+                                          createdAt: lastMessage?.createdAt
+                                        });
+                                        return lastMessage?.content?.substring(0, 50) || 'No messages yet';
+                                      })()}...
                                     </Typography>
-                                      <Typography
-                                        variant="caption"
-                                sx={{
-                                          color: 'rgba(255, 255, 255, 0.5)',
-                                          ml: 1,
-                                        }}
-                                      >
-                                        {conversation.messages?.[0] ? formatTime(conversation.messages[0].createdAt) : ''}
-                                      </Typography>
-                                    </Box>
-                                  </Box>
+                                    <Typography
+                                      variant="caption"
+                                      component="span"
+                                      sx={{
+                                        color: 'rgba(255, 255, 255, 0.5)',
+                                        float: 'right',
+                                        display: 'inline-block',
+                                      }}
+                                    >
+                                      {conversation.messages?.[0] ? formatTime(conversation.messages[0].createdAt) : ''}
+                                    </Typography>
+                                  </React.Fragment>
                                 }
                               />
                               
@@ -811,7 +913,9 @@ const MessagesPage: React.FC = () => {
                       <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.5)' }}>
                         {searchTerm || filterStatus !== 'all' 
                           ? 'Try adjusting your search or filter criteria.'
-                          : 'Start a conversation by contacting a seller from a product page.'
+                          : state.user?.role === 'SELLER' 
+                            ? 'You will see conversations here when buyers contact you about your products.'
+                            : 'Start a conversation by contacting a seller from a product page.'
                         }
                         </Typography>
                       </Box>
@@ -849,12 +953,16 @@ const MessagesPage: React.FC = () => {
                         src={getImageUrl(
                           currentConversation 
                             ? getOtherUser(currentConversation)?.profileImageUrl 
-                            : sellerData?.data?.data?.profileImageUrl, 
+                            : state.user?.role === 'SELLER' 
+                              ? sellerData?.data?.data?.profileImageUrl
+                              : sellerData?.data?.data?.profileImageUrl, 
                           'avatar'
                         )}
                         alt={currentConversation 
                           ? getOtherUserAlias(currentConversation) 
-                          : sellerData?.data?.data?.companyName || 'Seller'
+                          : state.user?.role === 'SELLER' 
+                            ? sellerData?.data?.data?.companyName || 'Buyer'
+                            : sellerData?.data?.data?.companyName || 'Seller'
                         }
                         sx={{
                           width: 48,
@@ -864,14 +972,18 @@ const MessagesPage: React.FC = () => {
                       >
                         {currentConversation 
                           ? getOtherUser(currentConversation)?.companyName?.charAt(0) || 'U'
-                          : sellerData?.data?.data?.companyName?.charAt(0) || 'S'
+                          : state.user?.role === 'SELLER' 
+                            ? sellerData?.data?.data?.companyName?.charAt(0) || 'B'
+                            : sellerData?.data?.data?.companyName?.charAt(0) || 'S'
                         }
                       </Avatar>
                       <Box>
                         <Typography variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
                           {currentConversation 
                             ? getOtherUser(currentConversation)?.companyName || 'Unknown Company'
-                            : sellerData?.data?.data?.companyName || 'Seller'
+                            : state.user?.role === 'SELLER' 
+                              ? sellerData?.data?.data?.companyName || 'Buyer'
+                              : sellerData?.data?.data?.companyName || 'Seller'
                           }
                         </Typography>
                         <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)' }}>
@@ -944,7 +1056,10 @@ const MessagesPage: React.FC = () => {
                     }}>
                       <Box sx={{ textAlign: 'center', mb: 2 }}>
                         <Typography variant="h5" sx={{ color: 'rgba(255, 255, 255, 0.9)', mb: 1 }}>
-                          Start a conversation with {sellerData?.data?.data?.companyName || 'the seller'}
+                          {state.user?.role === 'SELLER' 
+                            ? `Start a conversation with ${sellerData?.data?.data?.companyName || 'the buyer'}`
+                            : `Start a conversation with ${sellerData?.data?.data?.companyName || 'the seller'}`
+                          }
                         </Typography>
                         <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 2 }}>
                           Type your message below and press Enter to send
@@ -968,7 +1083,17 @@ const MessagesPage: React.FC = () => {
                         Failed to load messages. Please try again.
                       </Alert>
                     ) : messages?.data?.data?.messages && messages.data.data.messages.length > 0 ? (
-                      messages.data.data.messages.map((message: MessageType) => {
+                      (() => {
+                        const messagesArray = [...messages.data.data.messages].reverse();
+                        console.log('🔍 Selected conversation messages:', {
+                          conversationId: selectedConversation,
+                          totalMessages: messagesArray.length,
+                          firstMessage: messagesArray[0],
+                          lastMessage: messagesArray[messagesArray.length - 1],
+                          allMessages: messagesArray.map(m => ({ id: m.id, content: m.content, createdAt: m.createdAt }))
+                        });
+                        return messagesArray;
+                      })().map((message: MessageType) => {
                         const isOwnMessage = message.senderId === state.user?.id;
                         
                         return (
@@ -1160,7 +1285,10 @@ const MessagesPage: React.FC = () => {
                         Start a New Conversation
                       </Typography>
                       <Typography variant="h6" sx={{ color: 'rgba(255, 255, 255, 0.8)', mb: 1 }}>
-                        with {sellerData?.data?.data?.companyName || 'the seller'}
+                        {state.user?.role === 'SELLER' 
+                          ? `with ${sellerData?.data?.data?.companyName || 'the buyer'}`
+                          : `with ${sellerData?.data?.data?.companyName || 'the seller'}`
+                        }
                       </Typography>
                       <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)', mb: 4 }}>
                         {productData?.data?.data?.title || 'this product'}
@@ -1174,21 +1302,26 @@ const MessagesPage: React.FC = () => {
                         Select a conversation
                       </Typography>
                       <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.5)', mb: 4 }}>
-                        Choose a conversation from the list to start messaging
+                        {state.user?.role === 'SELLER' 
+                          ? 'Choose a conversation from the list to respond to buyer inquiries'
+                          : 'Choose a conversation from the list to start messaging'
+                        }
                       </Typography>
-                      <Button
-                        variant="contained"
-                        onClick={() => navigate('/products')}
-                        startIcon={<ShoppingCart />}
-                        sx={{
-                          background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
-                          '&:hover': {
-                            background: 'linear-gradient(45deg, #5b5cf6, #7c3aed)',
-                          },
-                        }}
-                      >
-                        Browse Products
-                      </Button>
+                      {state.user?.role !== 'SELLER' && (
+                        <Button
+                          variant="contained"
+                          onClick={() => navigate('/products')}
+                          startIcon={<ShoppingCart />}
+                          sx={{
+                            background: 'linear-gradient(45deg, #6366f1, #8b5cf6)',
+                            '&:hover': {
+                              background: 'linear-gradient(45deg, #5b5cf6, #7c3aed)',
+                            },
+                          }}
+                        >
+                          Browse Products
+                        </Button>
+                      )}
                     </>
                   )}
                 </Box>

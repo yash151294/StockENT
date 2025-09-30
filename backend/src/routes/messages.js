@@ -248,7 +248,12 @@ router.get(
   [authenticateToken],
   async (req, res) => {
     try {
-      const result = await getUserConversations(req.user.id, req.query);
+      // Add user role to filters for role-based filtering
+      const filters = {
+        ...req.query,
+        userRole: req.user.role,
+      };
+      const result = await getUserConversations(req.user.id, filters);
       res.json({
         success: true,
         data: result,
@@ -346,7 +351,7 @@ router.put(
  */
 router.get('/unread-count', [authenticateToken], async (req, res) => {
   try {
-    const count = await getUnreadMessageCount(req.user.id);
+    const count = await getUnreadMessageCount(req.user.id, req.user.role);
     res.json({
       success: true,
       data: { count },
@@ -368,17 +373,27 @@ router.get('/unread-notifications', [authenticateToken], async (req, res) => {
   try {
     const { limit = 20, since } = req.query;
     const userId = req.user.id;
+    const userRole = req.user.role;
     
     // Default to last 24 hours if no 'since' parameter is provided
     const sinceDate = since ? new Date(since) : new Date(Date.now() - 24 * 60 * 60 * 1000);
     
+    // Role-based filtering for notifications:
+    // - For SELLER: show notifications for conversations about their own products (initiated by buyers)
+    // - For BUYER: show notifications for conversations they initiated
+    let roleFilter;
+    if (userRole === 'SELLER') {
+      // Sellers see notifications for conversations about their own products (initiated by buyers)
+      roleFilter = { sellerId: userId };
+    } else {
+      // Buyers see notifications for conversations they initiated
+      roleFilter = { buyerId: userId };
+    }
+    
     const unreadMessages = await prisma.message.findMany({
       where: {
         conversation: {
-          OR: [
-            { buyerId: userId },
-            { sellerId: userId }
-          ]
+          ...roleFilter,
         },
         readAt: null, // Unread messages have null readAt
         senderId: { not: userId }, // Exclude messages sent by the current user

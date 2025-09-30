@@ -10,10 +10,11 @@ interface MessageNotificationProps {
 
 const MessageNotification: React.FC<MessageNotificationProps> = ({ onClose }) => {
   const { state } = useAuth();
-  const { notifications } = useNotifications();
+  const { notifications, isMessagesPageActive } = useNotifications();
 
   // Calculate unread message count from notifications
-  const unreadCount = notifications.filter(n => n.type === 'message' && !n.isRead).length;
+  // If MessagesPage is active, don't show unread count as notifications are suppressed
+  const unreadCount = isMessagesPageActive ? 0 : notifications.filter(n => n.type === 'message' && !n.isRead).length;
 
 
 

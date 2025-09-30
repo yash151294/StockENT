@@ -258,8 +258,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateUser = useCallback((user: User) => {
+    const previousRole = state.user?.role;
     dispatch({ type: 'UPDATE_USER', payload: user });
-  }, []);
+    
+    // If role changed, trigger a custom event to notify other contexts
+    if (previousRole && previousRole !== user.role) {
+      console.log('🔄 User role changed from', previousRole, 'to', user.role);
+      window.dispatchEvent(new CustomEvent('user:roleChanged', { 
+        detail: { 
+          previousRole, 
+          newRole: user.role,
+          userId: user.id 
+        } 
+      }));
+    }
+  }, [state.user?.role]);
 
   const loginWithOAuth = useCallback((user: User, isFirstLogin?: boolean) => {
     // Debug: Log the user data being stored
@@ -268,7 +281,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: user.email,
       profileImageUrl: user.profileImageUrl,
       contactPerson: user.contactPerson,
-      companyName: user.companyName
+      companyName: user.companyName,
+      role: user.role
     });
 
     // Tokens are already set in cookies by the server during OAuth callback
@@ -276,6 +290,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: 'LOGIN_SUCCESS',
       payload: { user, isFirstLogin, justLoggedIn: true, loginMethod: 'google' },
     });
+    
+    // For first-time logins, trigger a role change event to ensure notification system
+    // is properly initialized with the correct role-based filtering
+    // This fixes the issue where first-time users don't get proper notification filtering
+    if (isFirstLogin && user.role) {
+      console.log('🔄 First-time login detected, triggering role change event for role:', user.role);
+      window.dispatchEvent(new CustomEvent('user:roleChanged', { 
+        detail: { 
+          previousRole: null, // No previous role for first-time users
+          newRole: user.role,
+          userId: user.id,
+          isFirstLogin: true
+        } 
+      }));
+    }
     
     logger.info('User logged in with OAuth successfully');
   }, []);

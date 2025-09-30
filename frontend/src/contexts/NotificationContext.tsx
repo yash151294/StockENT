@@ -30,6 +30,7 @@ interface NotificationContextType {
   unreadCount: number;
   markAsRead: (notificationId: string) => void;
   markMessageNotificationsAsRead: (conversationId: string) => void;
+  clearMessageNotificationsForConversation: (conversationId: string) => void;
   markAllAsRead: () => void;
   markNotificationsViewed: () => void;
   addNotification: (notification: Omit<Notification, 'id' | 'isRead' | 'createdAt'>) => void;
@@ -38,6 +39,9 @@ interface NotificationContextType {
   clearDismissedNotifications: () => void; // For testing/debugging
   testNotification: () => void; // For testing/debugging
   testMessageNotification: () => void; // For testing message notifications
+  // MessagesPage state management
+  setMessagesPageActive: (isActive: boolean) => void;
+  isMessagesPageActive: boolean;
   // Toast notification methods
   showSuccess: (message: string) => void;
   showWarning: (message: string) => void;
@@ -56,10 +60,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
   const dismissedNotificationIdsRef = useRef<Set<string>>(new Set());
+  const [isMessagesPageActive, setIsMessagesPageActive] = useState<boolean>(false);
 
   // Get unread message count (currently not used but kept for future use)
-  useQuery({
-    queryKey: ['unread-message-count'],
+  const { refetch: refetchUnreadCount } = useQuery({
+    queryKey: ['unread-message-count', state.user?.role],
     queryFn: () => messagesAPI.getUnreadCount(),
     enabled: state.isAuthenticated && !!state.user?.id,
     refetchInterval: 30000,
@@ -68,6 +73,23 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  // Clear notifications when user role changes
+  useEffect(() => {
+    const handleRoleChange = (event: CustomEvent) => {
+      const { newRole, userId, isFirstLogin } = event.detail;
+      if (userId === state.user?.id) {
+        console.log('🔄 Role change event received, clearing notifications for role change:', newRole, 'isFirstLogin:', isFirstLogin);
+        clearNotificationsForRoleChange(newRole, isFirstLogin);
+      }
+    };
+
+    window.addEventListener('user:roleChanged', handleRoleChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('user:roleChanged', handleRoleChange as EventListener);
+    };
+  }, [state.user?.id, refetchUnreadCount]);
 
   // Load notifications from localStorage and fetch unread messages on mount
   useEffect(() => {
@@ -211,10 +233,33 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         console.log('📨 Message received event:', message);
         console.log('🔍 Message sender ID:', message.senderId);
         console.log('🔍 Current user ID:', state.user?.id);
+        console.log('🔍 MessagesPage active:', isMessagesPageActive);
+        console.log('🔍 User role:', state.user?.role);
         
-        // Only process if message is not from current user
-        if (message.senderId !== state.user?.id) {
-          console.log('✅ Processing message from different user');
+        // Apply role-based filtering
+        const shouldShowNotification = (() => {
+          if (message.senderId === state.user?.id || isMessagesPageActive) {
+            return false; // Don't show notifications from self or when MessagesPage is active
+          }
+          
+          // Role-based filtering:
+          // - For SELLER: show notifications for conversations about their own products (initiated by buyers)
+          // - For BUYER: show notifications for conversations they initiated
+          if (state.user?.role === 'SELLER') {
+            // Sellers should only see notifications for conversations where they are the seller
+            // (meaning the conversation was initiated by a buyer about their product)
+            return message.conversation?.sellerId === state.user?.id;
+          } else {
+            // Buyers should only see notifications for conversations where they are the buyer
+            // (meaning they initiated the conversation)
+            return message.conversation?.buyerId === state.user?.id;
+          }
+        })();
+        
+        console.log('🔍 Should show notification:', shouldShowNotification);
+        
+        if (shouldShowNotification) {
+          console.log('✅ Processing message from different user (MessagesPage not active)');
           setNotifications(prev => {
             const existingNotificationIndex = prev.findIndex(
               n => n.type === 'message' && n.data.senderId === message.senderId
@@ -284,9 +329,32 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         console.log('🔍 Extracted message:', message);
         console.log('🔍 Current user ID:', state.user?.id);
         console.log('🔍 Message sender ID:', message?.senderId);
+        console.log('🔍 User role:', state.user?.role);
         
-        if (!message || message.senderId === state.user?.id) {
-          console.log('❌ Message filtered out - either no message or from current user');
+        // Apply role-based filtering
+        const shouldShowNotification = (() => {
+          if (!message || message.senderId === state.user?.id || isMessagesPageActive) {
+            return false; // Don't show notifications from self, no message, or when MessagesPage is active
+          }
+          
+          // Role-based filtering:
+          // - For SELLER: show notifications for conversations about their own products (initiated by buyers)
+          // - For BUYER: show notifications for conversations they initiated
+          if (state.user?.role === 'SELLER') {
+            // Sellers should only see notifications for conversations where they are the seller
+            // (meaning the conversation was initiated by a buyer about their product)
+            return message.conversation?.sellerId === state.user?.id;
+          } else {
+            // Buyers should only see notifications for conversations where they are the buyer
+            // (meaning they initiated the conversation)
+            return message.conversation?.buyerId === state.user?.id;
+          }
+        })();
+        
+        console.log('🔍 Should show notification:', shouldShowNotification);
+        
+        if (!shouldShowNotification) {
+          console.log('❌ Message filtered out - role-based filtering or other conditions not met');
           return;
         }
         
@@ -406,7 +474,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         socket.off('auction_ended', handleAuctionActivity);
       };
     }
-  }, [socket, isConnected, state.isAuthenticated, state.user?.id]);
+  }, [socket, isConnected, state.isAuthenticated, state.user?.id, isMessagesPageActive]);
 
   const getAuctionActivityMessage = (activity: any): string => {
     switch (activity.type) {
@@ -460,6 +528,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     console.log('📱 Message notifications marked as read for conversation:', conversationId);
   };
 
+  const clearMessageNotificationsForConversation = (conversationId: string) => {
+    setNotifications(prev =>
+      prev.filter(notification =>
+        !(notification.type === 'message' && notification.data.conversationId === conversationId)
+      )
+    );
+    console.log('🗑️ Message notifications cleared for conversation:', conversationId);
+  };
+
   const markAllAsRead = () => {
     setNotifications(prev =>
       prev.map(notification => ({ ...notification, isRead: true }))
@@ -470,7 +547,11 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const markNotificationsViewed = async () => {
     try {
       await messagesAPI.markNotificationsViewed();
-      console.log('📱 Notifications marked as viewed');
+      // Also update local state to mark all notifications as read
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, isRead: true }))
+      );
+      console.log('📱 Notifications marked as viewed and local state updated');
     } catch (error) {
       console.error('Error marking notifications as viewed:', error);
     }
@@ -493,6 +574,102 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     // Clear all notifications
     setNotifications([]);
     console.log('🗑️ All notifications cleared');
+  };
+
+  const clearNotificationsForRoleChange = (newRole: string, isFirstLogin?: boolean) => {
+    console.log('🔄 Clearing notifications for role change to:', newRole, 'isFirstLogin:', isFirstLogin);
+    
+    // Clear all notifications and localStorage
+    setNotifications([]);
+    setDismissedNotificationIds(new Set());
+    dismissedNotificationIdsRef.current = new Set();
+    
+    if (state.user?.id) {
+      localStorage.removeItem(`notifications_${state.user.id}`);
+      localStorage.removeItem(`dismissed_notifications_${state.user.id}`);
+      console.log('🧹 Cleared localStorage for user:', state.user.id);
+    }
+    
+    // Force refetch of unread count with new role
+    refetchUnreadCount();
+    
+    // For first-time logins, we don't need to reload notifications since there are no existing messages
+    // This ensures the notification system is properly initialized with the correct role-based filtering
+    // for future real-time notifications
+    if (isFirstLogin) {
+      console.log('📭 First-time login detected, no notifications to load - notification system initialized for role:', newRole);
+      return;
+    }
+    
+    // Reload notifications with new role-based filtering
+    setTimeout(async () => {
+      try {
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const response = await messagesAPI.getUnreadNotifications(50, oneWeekAgo);
+        
+        if (response.data.success && response.data.data && response.data.data.length > 0) {
+          console.log('📬 Reloading notifications with role-based filtering for role:', newRole);
+          
+          // Group messages by sender to create one notification per user
+          const messagesBySender = new Map();
+          
+          response.data.data.forEach((message: any) => {
+            const senderId = message.senderId;
+            if (!messagesBySender.has(senderId)) {
+              messagesBySender.set(senderId, {
+                latestMessage: message,
+                count: 0,
+              });
+            }
+            messagesBySender.get(senderId).count++;
+            
+            // Keep the most recent message
+            if (new Date(message.createdAt) > new Date(messagesBySender.get(senderId).latestMessage.createdAt)) {
+              messagesBySender.get(senderId).latestMessage = message;
+            }
+          });
+
+          // Create one notification per sender
+          const unreadMessageNotifications = Array.from(messagesBySender.values())
+            .map(({ latestMessage, count }) => ({
+              id: `user_msg_${latestMessage.senderId}`,
+              type: 'message' as const,
+              title: 'Unread Messages',
+              message: count === 1 
+                ? `${latestMessage.sender?.companyName || 'Someone'} sent you a message`
+                : `${latestMessage.sender?.companyName || 'Someone'} sent you ${count} messages`,
+              data: {
+                conversationId: latestMessage.conversationId,
+                senderName: latestMessage.sender?.companyName || 'Unknown',
+                senderId: latestMessage.senderId,
+                senderProfileImageUrl: latestMessage.sender?.profileImageUrl || undefined,
+                productId: latestMessage.product?.id,
+                productTitle: latestMessage.product?.title,
+                unreadCount: count,
+              },
+              isRead: false,
+              createdAt: latestMessage.createdAt,
+              onClick: () => {
+                window.location.href = `/messages?conversation=${latestMessage.conversationId}`;
+              },
+            }));
+
+          // Set new notifications
+          setNotifications(unreadMessageNotifications);
+          
+          // Save to localStorage
+          if (state.user?.id) {
+            localStorage.setItem(`notifications_${state.user.id}`, JSON.stringify(unreadMessageNotifications));
+          }
+          
+          console.log(`📬 Loaded ${unreadMessageNotifications.length} notifications for role:`, newRole);
+        } else {
+          console.log('📭 No notifications found for role:', newRole);
+        }
+      } catch (error) {
+        console.error('Error reloading notifications after role change:', error);
+      }
+    }, 100); // Small delay to ensure state is cleared
   };
 
   const clearDismissedNotifications = () => {
@@ -652,6 +829,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     unreadCount,
     markAsRead,
     markMessageNotificationsAsRead,
+    clearMessageNotificationsForConversation,
     markAllAsRead,
     markNotificationsViewed,
     addNotification,
@@ -660,6 +838,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     clearDismissedNotifications,
     testNotification,
     testMessageNotification,
+    setMessagesPageActive: setIsMessagesPageActive,
+    isMessagesPageActive,
     showSuccess,
     showWarning,
     showError,

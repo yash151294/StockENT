@@ -190,11 +190,11 @@ const OAuthCallbackPage: React.FC = () => {
       >
         <CheckCircle sx={{ fontSize: 80, color: 'success.main' }} />
         <Typography variant="h4" color="success.main" gutterBottom>
-          {isFirstLogin ? 'Welcome to StockENT!' : 'Welcome back!'}
+          {isFirstLogin ? 'Account Created!' : 'Welcome back!'}
         </Typography>
         <Typography variant="h6" color="text.secondary" align="center">
           {isFirstLogin 
-            ? 'You have successfully signed in with Google. Here\'s what\'s happening with your account today.'
+            ? 'Your account has been successfully created and verified.'
             : 'You have been successfully signed in with Google.'
           }
         </Typography>

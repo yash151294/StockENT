@@ -352,6 +352,12 @@ const sendMessage = async (
           sender: {
             id: message.senderId,
             companyName: senderId === conversation.buyerId ? conversation.buyer.companyName : conversation.seller.companyName,
+          },
+          // Include conversation data for role-based filtering
+          conversation: {
+            id: conversationId,
+            buyerId: conversation.buyerId,
+            sellerId: conversation.sellerId,
           }
         },
         product: conversation.product,
@@ -485,6 +491,12 @@ const sendMessageWithConversation = async (
           sender: {
             id: message.senderId,
             companyName: senderId === fullConversation.buyerId ? fullConversation.buyer.companyName : fullConversation.seller.companyName,
+          },
+          // Include conversation data for role-based filtering
+          conversation: {
+            id: conversation.id,
+            buyerId: fullConversation.buyerId,
+            sellerId: fullConversation.sellerId,
           }
         },
         product: fullConversation.product,
@@ -542,7 +554,7 @@ const getConversationMessages = async (
             },
           },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         skip,
         take: parseInt(limit),
       }),
@@ -571,13 +583,25 @@ const getConversationMessages = async (
  */
 const getUserConversations = async (userId, filters = {}) => {
   try {
-    const { page = 1, limit = 20, status, search } = filters;
+    const { page = 1, limit = 20, status, search, userRole } = filters;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {
-      OR: [{ buyerId: userId }, { sellerId: userId }],
-    };
+    // Role-based filtering: 
+    // - For BUYER: show conversations they initiated (buyerId = userId)
+    // - For SELLER: show conversations initiated by others (sellerId = userId)
+    let where;
+    if (userRole === 'SELLER') {
+      // Sellers see conversations where they are the seller (initiated by buyers)
+      where = {
+        sellerId: userId,
+      };
+    } else {
+      // Buyers see conversations where they are the buyer (initiated by them)
+      where = {
+        buyerId: userId,
+      };
+    }
 
     if (status) {
       where.status = status;
@@ -858,12 +882,24 @@ const updateConversationStatus = async (conversationId, userId, status) => {
 /**
  * Get unread message count for user
  */
-const getUnreadMessageCount = async (userId) => {
+const getUnreadMessageCount = async (userId, userRole = 'BUYER') => {
   try {
+    // Role-based filtering for unread message count:
+    // - For SELLER: count unread messages in conversations about their own products (initiated by buyers)
+    // - For BUYER: count unread messages in conversations they initiated
+    let roleFilter;
+    if (userRole === 'SELLER') {
+      // Sellers count unread messages for conversations about their own products (initiated by buyers)
+      roleFilter = { sellerId: userId };
+    } else {
+      // Buyers count unread messages for conversations they initiated
+      roleFilter = { buyerId: userId };
+    }
+
     const count = await prisma.message.count({
       where: {
         conversation: {
-          OR: [{ buyerId: userId }, { sellerId: userId }],
+          ...roleFilter,
         },
         senderId: { not: userId },
         readAt: null,
@@ -882,12 +918,24 @@ const getUnreadMessageCount = async (userId) => {
  */
 const searchConversations = async (userId, searchTerm, filters = {}) => {
   try {
-    const { page = 1, limit = 20, status } = filters;
+    const { page = 1, limit = 20, status, userRole } = filters;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Role-based filtering: 
+    // - For BUYER: show conversations they initiated (buyerId = userId)
+    // - For SELLER: show conversations initiated by others (sellerId = userId)
+    let roleFilter;
+    if (userRole === 'SELLER') {
+      // Sellers see conversations where they are the seller (initiated by buyers)
+      roleFilter = { sellerId: userId };
+    } else {
+      // Buyers see conversations where they are the buyer (initiated by them)
+      roleFilter = { buyerId: userId };
+    }
+
     const where = {
-      OR: [{ buyerId: userId }, { sellerId: userId }],
+      ...roleFilter,
       AND: [
         {
           OR: [

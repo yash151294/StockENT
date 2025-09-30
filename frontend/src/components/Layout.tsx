@@ -101,7 +101,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { label: t('navigation.products'), path: '/products' },
     { label: t('navigation.auctions'), path: '/auctions' },
     { label: t('navigation.messages'), path: '/messages', auth: true, requiresConversations: true },
-    { label: t('navigation.watchlist'), path: '/watchlist', auth: true },
+    { label: t('navigation.watchlist'), path: '/watchlist', auth: true, hideForRole: 'SELLER' },
   ];
 
   if (state.user?.role === 'ADMIN') {
@@ -164,6 +164,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   
                   // For messages tab, only show if user has conversations
                   if (item.requiresConversations && !hasConversations) return null;
+                  
+                  // Hide items for specific roles
+                  if (item.hideForRole && state.user?.role === item.hideForRole) return null;
                   
                   return (
                     <Button
@@ -361,6 +364,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               
               // For messages tab, only show if user has conversations
               if (item.requiresConversations && !hasConversations) return null;
+              
+              // Hide items for specific roles
+              if (item.hideForRole && state.user?.role === item.hideForRole) return null;
               
               return (
                 <ListItem

@@ -189,33 +189,45 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
             <Typography variant="h6" sx={{ color: 'white', fontWeight: 600 }}>
               Notifications
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 0.5 }}>
               {unreadCount > 0 && (
                 <Button
                   size="small"
-                  startIcon={<MarkEmailRead />}
                   onClick={handleMarkAllAsRead}
                   sx={{
                     color: '#6366f1',
-                    fontSize: '0.75rem',
+                    fontSize: '0.7rem',
                     textTransform: 'none',
+                    minWidth: 'auto',
+                    px: 1,
+                    py: 0.5,
+                    height: 24,
+                    '&:hover': {
+                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    },
                   }}
                 >
-                  Mark all read
+                  Mark read
                 </Button>
               )}
               {notifications.length > 0 && (
                 <Button
                   size="small"
-                  startIcon={<ClearAll />}
                   onClick={handleClearAll}
                   sx={{
                     color: '#ef4444',
-                    fontSize: '0.75rem',
+                    fontSize: '0.7rem',
                     textTransform: 'none',
+                    minWidth: 'auto',
+                    px: 1,
+                    py: 0.5,
+                    height: 24,
+                    '&:hover': {
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    },
                   }}
                 >
-                  Clear all
+                  Clear
                 </Button>
               )}
             </Box>
@@ -338,31 +350,15 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
                             {notification.data.productTitle}
                           </Typography>
                         )}
-                        {notification.data.unreadCount && notification.data.unreadCount > 1 && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: '#6366f1',
-                              display: 'block',
-                              mb: 0.5,
-                              fontWeight: 500,
-                            }}
-                          >
-                            {notification.data.unreadCount} unread messages
-                          </Typography>
-                        )}
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: 'rgba(255, 255, 255, 0.5)',
-                              fontSize: '0.7rem',
-                            }}
-                          >
-                            {formatTime(notification.createdAt)}
-                          </Typography>
-                          <ArrowForward sx={{ fontSize: 16, color: 'rgba(255, 255, 255, 0.4)' }} />
-                        </Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: 'rgba(255, 255, 255, 0.5)',
+                            fontSize: '0.7rem',
+                          }}
+                        >
+                          {formatTime(notification.createdAt)}
+                        </Typography>
                       </Box>
                       
                       <ListItemSecondaryAction>

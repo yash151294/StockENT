@@ -233,6 +233,12 @@ const initSocket = (server) => {
               id: socket.user.id,
               companyName: socket.user.companyName,
               country: socket.user.country || null,
+            },
+            // Include conversation data for role-based filtering
+            conversation: {
+              id: conversationId,
+              buyerId: conversation.buyerId,
+              sellerId: conversation.sellerId,
             }
           },
           product: conversation.product,

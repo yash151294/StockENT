@@ -280,7 +280,7 @@ const ProductsPage: React.FC = () => {
   
   // Check if we should show only user's products
   const searchParams = new URLSearchParams(location.search);
-  const showMyProducts = searchParams.get('my') === 'true';
+  const showMyProducts = searchParams.get('my') === 'true' || authState.user?.role === 'SELLER';
   
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -536,7 +536,9 @@ const ProductsPage: React.FC = () => {
       <PageHeader
         title={showMyProducts ? "My Products" : "Products"}
         subtitle={showMyProducts 
-          ? "Manage your product listings and track their performance"
+          ? authState.user?.role === 'SELLER' 
+            ? "View and manage your product listings"
+            : "Manage your product listings and track their performance"
           : "Discover textile materials from verified suppliers worldwide"
         }
       />

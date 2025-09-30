@@ -281,6 +281,12 @@ const AuctionDetailPage: React.FC = () => {
       return;
     }
 
+    // Don't allow sellers to add their own products to watchlist
+    if (authState.user?.role === 'SELLER' && auction?.product?.seller?.id === authState.user.id) {
+      showWarning('You cannot add your own products to watchlist.');
+      return;
+    }
+
     // If product is in watchlist, show confirmation dialog
     if (auction?.product?.isInWatchlist) {
       setRemoveConfirmOpen(true);
@@ -296,7 +302,7 @@ const AuctionDetailPage: React.FC = () => {
     } finally {
       setWatchlistLoading(false);
     }
-  }, [authState.isAuthenticated, navigate, auction?.product?.isInWatchlist, watchlistMutation]);
+  }, [authState.isAuthenticated, authState.user, navigate, auction?.product?.isInWatchlist, auction?.product?.seller?.id, watchlistMutation, showWarning]);
 
   const handleConfirmRemove = useCallback(async () => {
     setRemoveConfirmOpen(false);
@@ -865,22 +871,25 @@ const AuctionDetailPage: React.FC = () => {
                   </Button>
                 )}
                 
-                <Button
-                  variant="outlined"
-                  startIcon={auction?.product?.isInWatchlist ? <Favorite /> : <FavoriteBorder />}
-                  onClick={handleWatchlistToggle}
-                  disabled={watchlistLoading}
-                  sx={{
-                    borderColor: 'rgba(99, 102, 241, 0.4)',
-                    color: '#6366F1',
-                    '&:hover': {
-                      borderColor: '#6366F1',
-                      backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                    }
-                  }}
-                >
-                  {auction?.product?.isInWatchlist ? 'Watching' : 'Watch'}
-                </Button>
+                {/* Only show watchlist button for buyers or sellers viewing other sellers' auctions */}
+                {(authState.user?.role !== 'SELLER' || auction?.product?.seller?.id !== authState.user?.id) && (
+                  <Button
+                    variant="outlined"
+                    startIcon={auction?.product?.isInWatchlist ? <Favorite /> : <FavoriteBorder />}
+                    onClick={handleWatchlistToggle}
+                    disabled={watchlistLoading}
+                    sx={{
+                      borderColor: 'rgba(99, 102, 241, 0.4)',
+                      color: '#6366F1',
+                      '&:hover': {
+                        borderColor: '#6366F1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                      }
+                    }}
+                  >
+                    {auction?.product?.isInWatchlist ? 'Watching' : 'Watch'}
+                  </Button>
+                )}
                 
                 <Button
                   variant="outlined"

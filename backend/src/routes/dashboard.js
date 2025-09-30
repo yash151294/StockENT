@@ -116,18 +116,30 @@ router.get('/', authenticateToken, async (req, res) => {
       where: { userId: userId }
     });
 
-    // Get unread messages for recent activities
-    const unreadMessages = await prisma.message.findMany({
-      where: {
+    // Get unread messages for recent activities with role-based filtering
+    let unreadMessageFilter;
+    if (userRole === 'SELLER') {
+      // Sellers see unread messages in conversations about their own products (initiated by buyers)
+      unreadMessageFilter = {
         conversation: {
-          OR: [
-            { buyerId: userId },
-            { sellerId: userId }
-          ]
+          sellerId: userId,
         },
         readAt: null, // Unread messages have null readAt
         senderId: { not: userId } // Exclude messages sent by the current user
-      },
+      };
+    } else {
+      // Buyers see unread messages in conversations they initiated
+      unreadMessageFilter = {
+        conversation: {
+          buyerId: userId,
+        },
+        readAt: null, // Unread messages have null readAt
+        senderId: { not: userId } // Exclude messages sent by the current user
+      };
+    }
+
+    const unreadMessages = await prisma.message.findMany({
+      where: unreadMessageFilter,
       include: {
         conversation: {
           include: {
