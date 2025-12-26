@@ -1,0 +1,272 @@
+# StockENT Context Hierarchy Configuration
+# Three-tier context loading for AI-assisted development
+
+context:
+  # Tier 1: Foundation Context (Always Included)
+  # These files are loaded for every AI interaction
+  foundation:
+    priority: 1
+    always_include: true
+    max_inclusion: 100
+    sources:
+      # Core documentation
+      - path: "ai/guides/CLAUDE.md"
+        description: "Complete project guide"
+        required: true
+      - path: "ai/guides/ARCHITECTURE.md"
+        description: "System design patterns"
+        required: true
+      - path: "ai/guides/CONVENTIONS.md"
+        description: "Coding standards"
+        required: true
+      - path: "ai/guides/API_STANDARDS.md"
+        description: "REST API guidelines"
+        required: true
+      - path: "ai/guides/SECURITY.md"
+        description: "Security requirements"
+        required: true
+      - path: "ai/guides/ANTI_PATTERNS.md"
+        description: "Common mistakes to avoid"
+        required: false
+
+      # Configuration files
+      - path: "ai/config/context-hierarchy.yml"
+        description: "This configuration file"
+        required: true
+
+      # Database schema
+      - path: "backend/prisma/schema.prisma"
+        description: "Prisma schema - database models"
+        required: true
+
+      # Package configurations
+      - path: "backend/package.json"
+        description: "Backend dependencies and scripts"
+        required: true
+      - path: "frontend/package.json"
+        description: "Frontend dependencies and scripts"
+        required: true
+
+  # Tier 2: Project Context (Auto-Detected)
+  # Loaded based on file being worked on
+  project:
+    priority: 2
+    auto_detect: true
+    match_strategy:
+      - semantic
+      - path_proximity
+    sources:
+      # Backend domain entities (Prisma models)
+      - pattern: "backend/prisma/**/*.prisma"
+        description: "Database schema and models"
+
+      # Backend routes
+      - pattern: "backend/src/routes/**/*.js"
+        description: "API route definitions"
+
+      # Backend controllers
+      - pattern: "backend/src/controllers/**/*.js"
+        description: "Request handlers"
+
+      # Backend services
+      - pattern: "backend/src/services/**/*.js"
+        description: "Business logic"
+
+      # Backend middleware
+      - pattern: "backend/src/middleware/**/*.js"
+        description: "Express middleware"
+
+      # Backend validators
+      - pattern: "backend/src/validators/**/*.js"
+        description: "Request validation schemas"
+
+      # Server entry point
+      - path: "backend/src/server.js"
+        description: "Express server setup"
+
+      # Backend utilities
+      - pattern: "backend/src/utils/**/*.js"
+        description: "Utility functions"
+
+      # Backend cron jobs
+      - pattern: "backend/src/cron/**/*.js"
+        description: "Scheduled tasks"
+
+      # Frontend pages (App Router)
+      - pattern: "frontend/app/**/*.tsx"
+        description: "Next.js pages"
+
+      # Frontend components
+      - pattern: "frontend/src/components/**/*.tsx"
+        description: "React components"
+      - pattern: "frontend/src/components/**/*.ts"
+        description: "Component exports"
+
+      # Frontend lib
+      - pattern: "frontend/src/lib/**/*.ts"
+        description: "Library utilities"
+
+      # Frontend contexts
+      - pattern: "frontend/src/contexts/**/*.tsx"
+        description: "React context providers"
+
+      # Frontend services
+      - pattern: "frontend/src/services/**/*.ts"
+        description: "API client services"
+
+      # Frontend hooks
+      - pattern: "frontend/src/hooks/**/*.ts"
+        description: "Custom React hooks"
+
+      # Frontend types
+      - pattern: "frontend/src/types/**/*.ts"
+        description: "TypeScript type definitions"
+
+      # Frontend views
+      - pattern: "frontend/src/views/**/*.tsx"
+        description: "View components"
+
+      # Frontend utilities
+      - pattern: "frontend/src/utils/**/*.ts"
+        description: "Utility functions"
+
+  # Tier 3: Scope Context (Dynamic)
+  # Loaded based on immediate work context
+  scope:
+    priority: 3
+    auto_detect: true
+    include_dependencies: true
+    max_depth: 2
+    match_strategy:
+      - file_relationship
+      - import_graph
+    sources:
+      # Test files
+      - pattern: "**/*.test.js"
+        description: "Jest test files"
+      - pattern: "**/*.spec.js"
+        description: "Spec test files"
+      - pattern: "**/*.test.ts"
+        description: "TypeScript test files"
+      - pattern: "**/*.test.tsx"
+        description: "React component tests"
+
+      # Related configuration
+      - pattern: "**/jest.config.js"
+        description: "Jest configuration"
+      - pattern: "**/tsconfig.json"
+        description: "TypeScript configuration"
+
+# Global rules
+rules:
+  # Maximum context size in kilobytes
+  max_context_size: "150kb"
+
+  # Remove duplicate content across tiers
+  deduplicate: true
+
+  # Prefer recently modified files
+  prefer_recent: true
+
+  # Patterns to always exclude
+  exclude:
+    - "node_modules/**"
+    - "dist/**"
+    - "build/**"
+    - ".git/**"
+    - "coverage/**"
+    - ".next/**"
+    - "*.log"
+    - "*.lock"
+    - ".env*"
+    - "uploads/**"
+    - "*.map"
+
+# Quality gates
+quality:
+  require_documentation: true
+  enforce_conventions: true
+  validate_completeness: true
+  min_score: 70
+
+# Domain-specific patterns for StockENT
+patterns:
+  # Auction system
+  auction_resolution:
+    files:
+      - "backend/src/services/auctionService.js"
+      - "backend/src/cron/auctionCron.js"
+      - "backend/src/routes/auctions.js"
+      - "backend/src/controllers/auctionController.js"
+    tests:
+      - "backend/src/services/__tests__/auctionService.test.js"
+
+  # Negotiation system
+  negotiation_flow:
+    files:
+      - "backend/src/services/negotiationService.js"
+      - "backend/src/routes/negotiations.js"
+      - "backend/src/controllers/negotiationController.js"
+    tests:
+      - "backend/src/services/__tests__/negotiationService.test.js"
+
+  # Real-time events
+  realtime_events:
+    files:
+      - "backend/src/utils/socket.js"
+      - "frontend/src/contexts/SocketContext.tsx"
+      - "frontend/src/hooks/useSocket.ts"
+
+  # Cart system
+  cart_system:
+    files:
+      - "backend/src/services/cartService.js"
+      - "backend/src/routes/cart.js"
+      - "frontend/src/contexts/CartContext.tsx"
+
+  # Messaging system
+  messaging_system:
+    files:
+      - "backend/src/services/messageService.js"
+      - "backend/src/routes/messages.js"
+      - "frontend/src/services/messageService.ts"
+      - "frontend/src/services/keyService.ts"
+
+  # Authentication
+  authentication:
+    files:
+      - "backend/src/middleware/auth.js"
+      - "backend/src/controllers/authController.js"
+      - "backend/src/routes/auth.js"
+      - "frontend/src/contexts/AuthContext.tsx"
+
+# Specialist agent mappings
+agent_mappings:
+  backend-specialist:
+    - "backend/src/**/*.js"
+    - "backend/prisma/**"
+
+  frontend-specialist:
+    - "frontend/app/**/*.tsx"
+    - "frontend/src/**/*.tsx"
+    - "frontend/src/**/*.ts"
+
+  database-specialist:
+    - "backend/prisma/schema.prisma"
+    - "backend/prisma/migrations/**"
+    - "backend/prisma/seed.js"
+
+  api-specialist:
+    - "backend/src/routes/**/*.js"
+    - "backend/src/middleware/validators/**"
+
+  test-specialist:
+    - "**/*.test.js"
+    - "**/*.test.ts"
+    - "**/*.test.tsx"
+    - "**/*.spec.js"
+
+  integration-specialist:
+    - "backend/src/utils/socket.js"
+    - "backend/src/services/emailService.js"
+    - "frontend/src/contexts/SocketContext.tsx"
