@@ -1,0 +1,51 @@
+version: '3.8'
+
+# StockENT E2E Testing Containers
+# Isolated database for end-to-end tests
+
+services:
+  # PostgreSQL for E2E Tests (different port to avoid conflicts)
+  postgres-e2e:
+    image: postgres:15
+    container_name: stockent-postgres-e2e
+    environment:
+      POSTGRES_DB: stockent_e2e
+      POSTGRES_USER: e2euser
+      POSTGRES_PASSWORD: e2epass
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata-e2e:/var/lib/postgresql/data
+    networks:
+      - stockent-e2e-net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U e2euser -d stockent_e2e']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for E2E Tests (different port)
+  redis-e2e:
+    image: redis:7-alpine
+    container_name: stockent-redis-e2e
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis-e2e:/data
+    networks:
+      - stockent-e2e-net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata-e2e:
+    name: stockent-pgdata-e2e
+  redis-e2e:
+    name: stockent-redis-e2e
+
+networks:
+  stockent-e2e-net:
+    name: stockent-e2e-network

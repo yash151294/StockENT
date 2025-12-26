@@ -1,0 +1,9 @@
+# StockENT E2E Testing Processes
+# Used for running E2E tests with isolated database
+# Run with: HIVEMIND_PROCFILE=Procfiles/test.local hivemind
+#
+# Note: Hivemind sets PORT env var automatically (starting at 5000).
+# We override it here to use the correct ports for each service.
+
+api: PORT=5001 task run:api:test
+ui: PORT=3000 task run:ui

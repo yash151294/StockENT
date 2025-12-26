@@ -138,3 +138,6 @@ prisma/migrations/
 # OS
 .DS_Store
 Thumbs.db
+
+# Task runner cache
+.task/

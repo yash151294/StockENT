@@ -1,0 +1,52 @@
+version: '3.8'
+
+# StockENT Development Containers
+# PostgreSQL and Redis for local development
+
+services:
+  # PostgreSQL Database
+  postgres-dev:
+    image: postgres:15
+    container_name: stockent-postgres-dev
+    environment:
+      POSTGRES_DB: stockent_db
+      POSTGRES_USER: devuser
+      POSTGRES_PASSWORD: devpass
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    networks:
+      - stockent-net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devuser -d stockent_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis-dev:
+    image: redis:7-alpine
+    container_name: stockent-redis-dev
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-dev:/data
+    networks:
+      - stockent-net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+volumes:
+  pgdata-dev:
+    name: stockent-pgdata-dev
+  redis-dev:
+    name: stockent-redis-dev
+
+networks:
+  stockent-net:
+    name: stockent-network

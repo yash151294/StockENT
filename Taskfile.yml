@@ -1,0 +1,424 @@
+# https://taskfile.dev
+# Taskfile for StockENT B2B Textile Marketplace
+# This file defines all automation tasks for development, testing, and deployment
+
+version: "3"
+
+dotenv: ['.env']
+
+# Configuration variables
+vars:
+  DB_USER: devuser
+  DB_PASS: devpass
+  DB_NAME: stockent_db
+  BACKEND_PORT: 5001
+  FRONTEND_PORT: 3000
+
+tasks:
+  # ===========================================================================
+  # Default Task
+  # ===========================================================================
+  default:
+    desc: Lists all available tasks
+    cmds:
+      - task --list-all
+
+  # ===========================================================================
+  # Build Tasks
+  # ===========================================================================
+  build:
+    desc: Build all components (API and UI)
+    deps:
+      - build:api
+      - build:ui
+
+  build:api:
+    desc: Build the Express.js API (backend)
+    cmds:
+      - cd backend && npm run build 2>/dev/null || echo "No build script defined - backend runs directly"
+
+  build:ui:
+    desc: Build the Next.js UI (frontend)
+    cmds:
+      - cd frontend && npm run build
+
+  # ===========================================================================
+  # Installation Tasks
+  # ===========================================================================
+  install:
+    desc: Install all dependencies (root, backend, frontend)
+    deps:
+      - install:root
+      - install:api
+      - install:ui
+
+  install:root:
+    desc: Install root workspace dependencies
+    sources:
+      - package.json
+      - package-lock.json
+    cmds:
+      - npm install
+
+  install:api:
+    desc: Install backend dependencies
+    dir: backend
+    sources:
+      - package.json
+      - package-lock.json
+    cmds:
+      - npm install
+
+  install:ui:
+    desc: Install frontend dependencies
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    cmds:
+      - npm install
+
+  # ===========================================================================
+  # Run Tasks
+  # ===========================================================================
+  run:api:
+    desc: Run the API development server with nodemon
+    dir: backend
+    cmds:
+      - npm run dev
+
+  run:ui:
+    desc: Run the Next.js development server
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  run:api:test:
+    desc: Run the API development server in test mode
+    dir: backend
+    env:
+      NODE_ENV: test
+    cmds:
+      - npm run dev
+
+  run:
+    desc: Run both API and UI separately (use 'local' for unified output)
+    deps:
+      - run:api
+      - run:ui
+
+  # ===========================================================================
+  # Local Development (Recommended)
+  # ===========================================================================
+  local:
+    desc: Run the app in local development mode using Hivemind
+    deps:
+      - install
+    cmds:
+      - HIVEMIND_PROCFILE=Procfiles/app.local hivemind
+
+  local:test:
+    desc: Run the app with E2E test environment
+    cmds:
+      - HIVEMIND_PROCFILE=Procfiles/test.local hivemind
+
+  # ===========================================================================
+  # Database Tasks
+  # ===========================================================================
+  db:generate:
+    desc: Generate Prisma client
+    dir: backend
+    cmds:
+      - npx prisma generate
+
+  db:migrate:
+    desc: Run Prisma migrations (development)
+    dir: backend
+    cmds:
+      - npx prisma migrate dev
+
+  db:migrate:deploy:
+    desc: Deploy Prisma migrations (production)
+    dir: backend
+    cmds:
+      - npx prisma migrate deploy
+
+  db:seed:
+    desc: Seed the database with sample data
+    dir: backend
+    cmds:
+      - npm run db:seed
+
+  db:studio:
+    desc: Open Prisma Studio (database GUI)
+    dir: backend
+    cmds:
+      - npx prisma studio
+
+  db:reset:
+    desc: Reset the database (drops all data and re-migrates)
+    dir: backend
+    cmds:
+      - npx prisma migrate reset
+
+  db:push:
+    desc: Push schema changes without migrations (development only)
+    dir: backend
+    cmds:
+      - npx prisma db push
+
+  # ===========================================================================
+  # Docker Tasks
+  # ===========================================================================
+  docker:start:
+    desc: Start PostgreSQL and Redis containers for development
+    cmds:
+      - docker-compose up -d
+
+  docker:stop:
+    desc: Stop all containers
+    cmds:
+      - docker-compose down
+
+  docker:logs:
+    desc: View container logs
+    cmds:
+      - docker-compose logs -f
+
+  docker:restart:
+    desc: Restart all containers
+    cmds:
+      - docker-compose restart
+
+  docker:reset:
+    desc: Reset containers (remove volumes and restart)
+    cmds:
+      - docker-compose down -v
+      - docker-compose up -d
+      - task: db:migrate
+      - task: db:seed
+
+  docker:e2e:start:
+    desc: Start E2E test containers
+    cmds:
+      - docker-compose -f docker-compose.e2e.yml up -d
+
+  docker:e2e:stop:
+    desc: Stop E2E test containers
+    cmds:
+      - docker-compose -f docker-compose.e2e.yml down
+
+  # ===========================================================================
+  # Test Tasks
+  # ===========================================================================
+  test:
+    desc: Run all unit tests (API and UI)
+    deps:
+      - test:api
+      - test:ui
+
+  test:api:
+    desc: Run backend unit tests with Jest
+    dir: backend
+    cmds:
+      - npm test
+
+  test:ui:
+    desc: Run frontend unit tests
+    dir: frontend
+    cmds:
+      - npm test 2>/dev/null || echo "No test script defined"
+
+  test:e2e:
+    desc: Run E2E tests with Playwright
+    cmds:
+      - cd frontend && npx playwright test
+
+  test:e2e:ui:
+    desc: Run Playwright with interactive UI
+    cmds:
+      - cd frontend && npx playwright test --ui
+
+  test:coverage:
+    desc: Run tests with coverage report
+    dir: backend
+    cmds:
+      - npm test -- --coverage
+
+  # ===========================================================================
+  # Linting & Formatting Tasks
+  # ===========================================================================
+  lint:
+    desc: Run linting on all code
+    deps:
+      - lint:api
+      - lint:ui
+
+  lint:api:
+    desc: Run ESLint on backend code
+    dir: backend
+    cmds:
+      - npm run lint 2>/dev/null || echo "Linting backend..."
+
+  lint:ui:
+    desc: Run ESLint on frontend code
+    dir: frontend
+    cmds:
+      - npm run lint
+
+  lint:fix:
+    desc: Auto-fix linting issues
+    deps:
+      - lint:fix:api
+      - lint:fix:ui
+
+  lint:fix:api:
+    desc: Auto-fix backend linting issues
+    dir: backend
+    cmds:
+      - npm run lint -- --fix 2>/dev/null || echo "No lint:fix script"
+
+  lint:fix:ui:
+    desc: Auto-fix frontend linting issues
+    dir: frontend
+    cmds:
+      - npm run lint:fix 2>/dev/null || npm run lint -- --fix
+
+  format:
+    desc: Format all code with Prettier
+    deps:
+      - format:api
+      - format:ui
+
+  format:api:
+    desc: Format backend code
+    dir: backend
+    cmds:
+      - npm run format 2>/dev/null || npx prettier --write "src/**/*.js"
+
+  format:ui:
+    desc: Format frontend code
+    dir: frontend
+    cmds:
+      - npm run format 2>/dev/null || npx prettier --write "src/**/*.{ts,tsx}"
+
+  # ===========================================================================
+  # Type Checking
+  # ===========================================================================
+  typecheck:
+    desc: Run TypeScript type checking
+    dir: frontend
+    cmds:
+      - npm run type-check
+
+  # ===========================================================================
+  # Context Engineering Tasks
+  # ===========================================================================
+  context:validate:
+    desc: Validate AI context engineering files
+    cmds:
+      - npx ts-node --project ai/tools/tsconfig.json ai/tools/validate-context.ts
+
+  context:audit:
+    desc: Audit AI context coverage
+    cmds:
+      - npx ts-node --project ai/tools/tsconfig.json ai/tools/audit-context.ts
+
+  context:load:
+    desc: Load context for a specific file
+    cmds:
+      - npx ts-node --project ai/tools/tsconfig.json ai/tools/context-loader.ts {{.CLI_ARGS}}
+
+  context:update:
+    desc: Suggest AI context documentation updates
+    cmds:
+      - npx ts-node --project ai/tools/tsconfig.json ai/tools/update-context.ts {{.CLI_ARGS}}
+
+  # ===========================================================================
+  # Setup Tasks
+  # ===========================================================================
+  setup:
+    desc: Set up the entire project (first-time setup)
+    cmds:
+      - task: setup:env
+      - task: docker:start
+      - task: install
+      - task: db:generate
+      - task: db:migrate
+      - task: db:seed
+      - echo "Setup complete! Run 'task local' to start development."
+
+  setup:env:
+    desc: Set up environment variables (interactive)
+    cmds:
+      - ./scripts/setup.sh
+
+  # ===========================================================================
+  # Utility Tasks
+  # ===========================================================================
+  clean:
+    desc: Clean all build artifacts and dependencies
+    cmds:
+      - rm -rf node_modules
+      - rm -rf backend/node_modules
+      - rm -rf backend/dist
+      - rm -rf frontend/node_modules
+      - rm -rf frontend/.next
+      - rm -rf frontend/out
+      - echo "Cleaned all artifacts. Run 'task install' to reinstall."
+
+  rebuild:
+    desc: Clean and rebuild the entire application
+    cmds:
+      - task: clean
+      - task: install
+      - task: build
+
+  health:
+    desc: Check health of all services
+    cmds:
+      - echo "Checking backend health..."
+      - curl -s http://localhost:{{.BACKEND_PORT}}/api/health || echo "Backend not running"
+      - echo ""
+      - echo "Checking frontend..."
+      - curl -s http://localhost:{{.FRONTEND_PORT}} > /dev/null && echo "Frontend is running" || echo "Frontend not running"
+      - echo ""
+      - echo "Checking PostgreSQL..."
+      - docker-compose exec -T postgres-dev pg_isready || echo "PostgreSQL not running"
+      - echo ""
+      - echo "Checking Redis..."
+      - docker-compose exec -T redis-dev redis-cli ping || echo "Redis not running"
+
+  logs:api:
+    desc: View backend logs
+    cmds:
+      - tail -f backend/logs/*.log 2>/dev/null || echo "No log files found"
+
+  # ===========================================================================
+  # Deployment Tasks
+  # ===========================================================================
+  deploy:staging:
+    desc: Deploy to staging environment
+    cmds:
+      - ./scripts/deploy.sh staging
+
+  deploy:production:
+    desc: Deploy to production environment
+    cmds:
+      - ./scripts/deploy.sh production
+
+  # ===========================================================================
+  # Quick Commands
+  # ===========================================================================
+  dev:
+    desc: Alias for 'local' - start development environment
+    cmds:
+      - task: local
+
+  start:
+    desc: Start the application (production mode)
+    deps:
+      - docker:start
+    cmds:
+      - cd backend && npm start &
+      - cd frontend && npm start

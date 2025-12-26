@@ -1,0 +1,200 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to rollback to (e.g., v1.0.0 or sha-abc1234)'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for rollback'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ==========================================================================
+  # Validate Rollback Request
+  # ==========================================================================
+  validate:
+    name: Validate Rollback
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      is_sha: ${{ steps.parse.outputs.is_sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse version
+        id: parse
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          if [[ "$VERSION" =~ ^sha- ]]; then
+            echo "is_sha=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "is_sha=false" >> $GITHUB_OUTPUT
+            # Remove 'v' prefix if present
+            VERSION=${VERSION#v}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log rollback details
+        run: |
+          echo "==================================="
+          echo "ROLLBACK REQUEST"
+          echo "==================================="
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Version: ${{ steps.parse.outputs.version }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Requested by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+          echo "==================================="
+
+  # ==========================================================================
+  # Rollback Staging
+  # ==========================================================================
+  rollback-staging:
+    name: Rollback Staging
+    needs: [validate]
+    if: github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: staging
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.is_sha == 'true' && needs.validate.outputs.version || format('v{0}', needs.validate.outputs.version) }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.STAGING_API_URL }}
+          NEXT_PUBLIC_SOCKET_URL: ${{ secrets.STAGING_SOCKET_URL }}
+        run: npm run build
+
+      - name: Deploy rollback to staging
+        run: |
+          echo "Rolling back staging to version ${{ needs.validate.outputs.version }}..."
+          # Add your staging rollback commands here
+
+      - name: Notify rollback success
+        if: success()
+        run: |
+          echo "Staging rollback successful!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+
+      - name: Notify rollback failure
+        if: failure()
+        run: |
+          echo "Staging rollback FAILED!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+
+  # ==========================================================================
+  # Rollback Production
+  # ==========================================================================
+  rollback-production:
+    name: Rollback Production
+    needs: [validate]
+    if: github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.is_sha == 'true' && needs.validate.outputs.version || format('v{0}', needs.validate.outputs.version) }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+          NEXT_PUBLIC_SOCKET_URL: ${{ secrets.PRODUCTION_SOCKET_URL }}
+          NEXT_PUBLIC_ENVIRONMENT: production
+        run: npm run build
+
+      - name: Deploy rollback to production
+        run: |
+          echo "Rolling back production to version ${{ needs.validate.outputs.version }}..."
+          # Add your production rollback commands here
+          # IMPORTANT: This should match your normal production deployment
+
+      - name: Create rollback record
+        run: |
+          echo "==================================="
+          echo "ROLLBACK COMPLETED"
+          echo "==================================="
+          echo "Environment: production"
+          echo "Rolled back to: ${{ needs.validate.outputs.version }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Executed by: ${{ github.actor }}"
+          echo "Time: $(date -u)"
+          echo "==================================="
+
+      - name: Notify rollback success
+        if: success()
+        run: |
+          echo "Production rollback successful!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+
+      - name: Notify rollback failure
+        if: failure()
+        run: |
+          echo "Production rollback FAILED!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "MANUAL INTERVENTION REQUIRED!"

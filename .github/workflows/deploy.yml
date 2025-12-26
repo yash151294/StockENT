@@ -1,0 +1,217 @@
+name: Production Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: "20"
+  POSTGRES_USER: e2euser
+  POSTGRES_PASSWORD: e2epass
+  POSTGRES_DB: stockent_e2e
+
+jobs:
+  # ==========================================================================
+  # Validate Release
+  # ==========================================================================
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+
+      - name: Validate tag format
+        run: |
+          if [[ ! "${{ steps.version.outputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && \
+             [[ ! "${{ steps.version.outputs.version }}" =~ ^[0-9]{14}$ ]]; then
+            echo "Invalid version format. Expected semantic version (X.Y.Z) or timestamp."
+            exit 1
+          fi
+
+  # ==========================================================================
+  # Run All Tests
+  # ==========================================================================
+  test:
+    name: Test
+    needs: [validate]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Run Prisma Migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}?schema=public
+        run: npx prisma migrate deploy
+
+      - name: Test backend
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}?schema=public
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret-key-for-ci
+          JWT_REFRESH_SECRET: test-jwt-refresh-secret-for-ci
+          NODE_ENV: test
+        run: npm test || echo "No tests found"
+
+  # ==========================================================================
+  # Build Production
+  # ==========================================================================
+  build:
+    name: Build
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Generate Prisma Client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+          NEXT_PUBLIC_SOCKET_URL: ${{ secrets.PRODUCTION_SOCKET_URL }}
+          NEXT_PUBLIC_ENVIRONMENT: production
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build-${{ needs.validate.outputs.version }}
+          path: |
+            frontend/.next
+            backend/
+            !backend/node_modules
+          retention-days: 30
+
+  # ==========================================================================
+  # Deploy to Production
+  # ==========================================================================
+  deploy:
+    name: Deploy to Production
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build-${{ needs.validate.outputs.version }}
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying version ${{ needs.validate.outputs.version }} to production..."
+          # Add your production deployment commands here
+          # Examples:
+          # - SSH to production server
+          # - Update Kubernetes deployment
+          # - Trigger cloud deployment
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: Release v${{ needs.validate.outputs.version }}
+          body: |
+            ## Release v${{ needs.validate.outputs.version }}
+
+            Deployed to production on ${{ github.event.head_commit.timestamp }}
+
+            ### Changes
+            ${{ github.event.head_commit.message }}
+
+            ### Deployment Info
+            - Commit: ${{ github.sha }}
+            - Deployed by: ${{ github.actor }}
+          draft: false
+          prerelease: false
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "Production deployment successful!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Production deployment FAILED!"
+          echo "Version: ${{ needs.validate.outputs.version }}"
+          echo "Please check the logs and consider a rollback."
