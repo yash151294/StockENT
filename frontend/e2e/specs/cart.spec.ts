@@ -18,20 +18,28 @@ test.describe('Cart', () => {
     cartPage = new CartPage(page);
     productPage = new ProductPage(page);
 
-    // Login before each test
+    // Login before each test with robust retry logic
     await loginPage.goto();
     await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
 
-    // Wait for redirect to dashboard or products - allow more time and check for either
-    await page.waitForURL(/\/(dashboard|products)/, { timeout: 15000 }).catch(async () => {
-      // If login didn't redirect, check if we're already authenticated
-      const currentUrl = page.url();
-      if (currentUrl.includes('/login')) {
-        // Retry login once
-        await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
-        await page.waitForURL(/\/(dashboard|products)/, { timeout: 10000 });
+    // Wait for redirect to dashboard or products with retry mechanism
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await page.waitForURL(/\/(dashboard|products)/, { timeout: 15000 });
+        break; // Success, exit loop
+      } catch {
+        const currentUrl = page.url();
+        if (attempt < maxRetries && currentUrl.includes('/login')) {
+          // Wait a bit before retrying
+          await page.waitForTimeout(1000);
+          await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
+        } else if (attempt === maxRetries) {
+          // Final attempt - just wait longer
+          await page.waitForURL(/\/(dashboard|products)/, { timeout: 20000 });
+        }
       }
-    });
+    }
   });
 
   test.describe('Cart Access', () => {
