@@ -2,6 +2,26 @@ const rateLimit = require('express-rate-limit');
 const { logger } = require('../utils/logger');
 
 /**
+ * Check if we should skip rate limiting
+ * Skip for: development, test environment, or E2E test requests
+ */
+const shouldSkipRateLimit = (req) => {
+  // Skip in development or test environments
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    return true;
+  }
+  // Skip if E2E test header is present
+  if (req.headers['x-e2e-test'] === 'true') {
+    return true;
+  }
+  // Skip for health checks and static files
+  if (req.path === '/health' || req.path.startsWith('/uploads/')) {
+    return true;
+  }
+  return false;
+};
+
+/**
  * General rate limiter
  */
 const generalLimiter = rateLimit({
@@ -13,12 +33,7 @@ const generalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limiting for static files, health checks, and in development
-    return process.env.NODE_ENV === 'development' || 
-           req.path.startsWith('/uploads/') || 
-           req.path === '/api/health';
-  },
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -40,6 +55,7 @@ const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Auth rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -61,6 +77,7 @@ const passwordResetLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Password reset rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -82,12 +99,7 @@ const apiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limiting for static files, health checks, and in development
-    return process.env.NODE_ENV === 'development' || 
-           req.path.startsWith('/uploads/') || 
-           req.path === '/api/health';
-  },
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`API rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -109,6 +121,7 @@ const uploadLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Upload rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -130,6 +143,7 @@ const messageLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Message rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -151,6 +165,7 @@ const bidLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: shouldSkipRateLimit,
   handler: (req, res) => {
     logger.warn(`Bid rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({

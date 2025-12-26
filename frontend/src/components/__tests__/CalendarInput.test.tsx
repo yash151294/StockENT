@@ -1,12 +1,25 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CalendarInput from '../CalendarInput';
+
+// Create a default MUI theme for testing
+const theme = createTheme();
+
+// Helper to render with MUI ThemeProvider
+const renderWithTheme = (ui: React.ReactElement) => {
+  return render(
+    <ThemeProvider theme={theme}>
+      {ui}
+    </ThemeProvider>
+  );
+};
 
 describe('CalendarInput', () => {
   it('should render with label and placeholder', () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -21,7 +34,7 @@ describe('CalendarInput', () => {
 
   it('should open calendar popover on click', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -39,7 +52,7 @@ describe('CalendarInput', () => {
 
   it('should display current month and year in calendar header', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -54,13 +67,15 @@ describe('CalendarInput', () => {
       const currentDate = new Date();
       const monthName = currentDate.toLocaleString('default', { month: 'long' });
       const year = currentDate.getFullYear();
-      expect(screen.getByText(`${monthName} ${year}`)).toBeInTheDocument();
+      // Month and year are separate buttons in the header
+      expect(screen.getByText(monthName)).toBeInTheDocument();
+      expect(screen.getByText(year.toString())).toBeInTheDocument();
     });
   });
 
   it('should show time picker for datetime-local format', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -81,7 +96,7 @@ describe('CalendarInput', () => {
 
   it('should handle date selection', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -93,8 +108,13 @@ describe('CalendarInput', () => {
     fireEvent.click(input);
 
     await waitFor(() => {
-      const todayButton = screen.getByText('1'); // First day of month
-      fireEvent.click(todayButton);
+      // Find a day button (day 15 is usually available in any month)
+      const dayButtons = screen.getAllByRole('button').filter(
+        btn => btn.textContent && /^\d{1,2}$/.test(btn.textContent)
+      );
+      if (dayButtons.length > 0) {
+        fireEvent.click(dayButtons[0]);
+      }
     });
 
     expect(handleChange).toHaveBeenCalled();
@@ -102,7 +122,7 @@ describe('CalendarInput', () => {
 
   it('should handle today button click', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -123,7 +143,7 @@ describe('CalendarInput', () => {
 
   it('should handle clear button click', async () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value="2024-01-15"
         onChange={handleChange}
@@ -144,7 +164,7 @@ describe('CalendarInput', () => {
 
   it('should show error state', () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}
@@ -159,7 +179,7 @@ describe('CalendarInput', () => {
 
   it('should be disabled when disabled prop is true', () => {
     const handleChange = jest.fn();
-    render(
+    renderWithTheme(
       <CalendarInput
         value=""
         onChange={handleChange}

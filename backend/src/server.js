@@ -82,7 +82,7 @@ app.use(
   })
 );
 
-// Rate limiting - more permissive for development
+// Rate limiting - more permissive for development/test
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max:
@@ -97,8 +97,16 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
-    // Skip rate limiting for static files and health checks
-    return req.path.startsWith('/uploads/') || req.path === '/api/health';
+    // Skip rate limiting in development/test environments
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      return true;
+    }
+    // Skip if E2E test header is present
+    if (req.headers['x-e2e-test'] === 'true') {
+      return true;
+    }
+    // Skip for static files and health checks
+    return req.path.startsWith('/uploads/') || req.path === '/health';
   },
 });
 

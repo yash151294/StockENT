@@ -217,33 +217,111 @@ tasks:
       - test:api
       - test:ui
 
+  test:all:
+    desc: Run all tests including E2E
+    cmds:
+      - task: test:api
+      - task: test:ui
+      - task: test:e2e
+
   test:api:
     desc: Run backend unit tests with Jest
     dir: backend
     cmds:
       - npm test
 
-  test:ui:
-    desc: Run frontend unit tests
-    dir: frontend
-    cmds:
-      - npm test 2>/dev/null || echo "No test script defined"
-
-  test:e2e:
-    desc: Run E2E tests with Playwright
-    cmds:
-      - cd frontend && npx playwright test
-
-  test:e2e:ui:
-    desc: Run Playwright with interactive UI
-    cmds:
-      - cd frontend && npx playwright test --ui
-
-  test:coverage:
-    desc: Run tests with coverage report
+  test:api:watch:
+    desc: Run backend tests in watch mode
     dir: backend
     cmds:
-      - npm test -- --coverage
+      - npm run test:watch
+
+  test:api:coverage:
+    desc: Run backend tests with coverage report
+    dir: backend
+    cmds:
+      - npm run test:coverage
+
+  test:ui:
+    desc: Run frontend unit tests with Jest
+    dir: frontend
+    cmds:
+      - npm test -- --passWithNoTests
+
+  test:ui:watch:
+    desc: Run frontend tests in watch mode
+    dir: frontend
+    cmds:
+      - npm run test:watch
+
+  test:ui:coverage:
+    desc: Run frontend tests with coverage report
+    dir: frontend
+    cmds:
+      - npm run test:coverage
+
+  test:coverage:
+    desc: Run all tests with coverage reports
+    cmds:
+      - task: test:api:coverage
+      - task: test:ui:coverage
+
+  # ===========================================================================
+  # E2E Test Tasks (Playwright)
+  # ===========================================================================
+  test:e2e:
+    desc: Run E2E tests with Playwright (all browsers)
+    dir: frontend
+    cmds:
+      - npm run e2e
+
+  test:e2e:ui:
+    desc: Run Playwright with interactive UI mode
+    dir: frontend
+    cmds:
+      - npm run e2e:ui
+
+  test:e2e:headed:
+    desc: Run E2E tests in headed browser mode
+    dir: frontend
+    cmds:
+      - npm run e2e:headed
+
+  test:e2e:chromium:
+    desc: Run E2E tests in Chromium only
+    dir: frontend
+    cmds:
+      - npm run e2e -- --project=chromium
+
+  test:e2e:firefox:
+    desc: Run E2E tests in Firefox only
+    dir: frontend
+    cmds:
+      - npm run e2e -- --project=firefox
+
+  test:e2e:webkit:
+    desc: Run E2E tests in WebKit (Safari) only
+    dir: frontend
+    cmds:
+      - npm run e2e -- --project=webkit
+
+  test:e2e:debug:
+    desc: Run E2E tests in debug mode
+    dir: frontend
+    cmds:
+      - npx playwright test --debug
+
+  playwright:install:
+    desc: Install Playwright browsers
+    dir: frontend
+    cmds:
+      - npx playwright install --with-deps
+
+  playwright:report:
+    desc: Show Playwright HTML report
+    dir: frontend
+    cmds:
+      - npx playwright show-report
 
   # ===========================================================================
   # Linting & Formatting Tasks
