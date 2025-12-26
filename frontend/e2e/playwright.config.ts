@@ -31,7 +31,7 @@ export default defineConfig({
   reporter: [
     ['list'],
     ['html', { outputFolder: '../playwright-report' }],
-    ...(process.env.CI ? [['github' as const]] : []),
+    ...(process.env.CI ? [['github', {}] as const] : []),
   ],
 
   // Global test settings
