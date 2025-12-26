@@ -22,6 +22,8 @@ const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const searchRoutes = require('./routes/search');
 const dashboardRoutes = require('./routes/dashboard');
+const cartRoutes = require('./routes/cart');
+const negotiationRoutes = require('./routes/negotiations');
 
 // Import middleware
 const { errorHandler } = require('./middleware/errorHandler');
@@ -80,12 +82,12 @@ app.use(
   })
 );
 
-// Rate limiting
+// Rate limiting - more permissive for development
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max:
     parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) ||
-    (process.env.NODE_ENV === 'development' ? 100000 : 100), // Very high limit for development
+    (process.env.NODE_ENV === 'development' ? 1000000 : 1000), // Much higher limit for development
   message: {
     error: 'Too many requests from this IP, please try again later.',
     retryAfter: Math.ceil(
@@ -94,9 +96,27 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for static files and health checks
+    return req.path.startsWith('/uploads/') || req.path === '/api/health';
+  },
 });
 
 app.use('/api/', limiter);
+
+// Static file serving - serve from backend/uploads where files are actually stored
+// This should be early in the middleware stack to avoid conflicts
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Test endpoint for static files
+app.get('/test-upload/:filename', (req, res) => {
+  const filePath = path.join(__dirname, 'uploads', req.params.filename);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      res.status(404).json({ error: 'File not found', path: filePath });
+    }
+  });
+});
 
 // CORS configuration
 const { corsMiddleware } = require('./middleware/cors');
@@ -108,9 +128,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Cookie parsing middleware
 app.use(cookieParser());
-
-// Static file serving
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -132,6 +149,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/negotiations', negotiationRoutes);
 
 // Socket.IO connection handling is now done in utils/socket.js
 

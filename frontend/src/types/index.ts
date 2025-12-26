@@ -211,3 +211,141 @@ export interface AdminDashboardResponse {
   recentUsers: User[];
   recentProducts: Product[];
 }
+
+// Bid types
+export interface Bid {
+  id: string;
+  auctionId: string;
+  bidderId: string;
+  amount: number;
+  createdAt: string;
+  bidder?: {
+    id: string;
+    companyName: string;
+    country: string;
+  };
+}
+
+// Dashboard types
+export interface DashboardStats {
+  totalProducts?: number;
+  activeProducts?: number;
+  totalAuctions?: number;
+  liveAuctions?: number;
+  totalConversations?: number;
+  totalMessages?: number;
+  totalOrders?: number;
+  pendingOrders?: number;
+  totalRevenue?: number;
+  monthlyRevenue?: number;
+  watchlistCount?: number;
+  negotiationCount?: number;
+  activeNegotiations?: number;
+}
+
+// Watchlist types
+export interface WatchlistItem {
+  id: string;
+  userId: string;
+  productId: string;
+  createdAt: string;
+  product?: Product;
+}
+
+// Cart types
+export interface CartItem {
+  id: string;
+  userId: string;
+  productId: string;
+  quantity: number;
+  priceAtAddition: number;
+  currency: 'USD' | 'INR' | 'CNY' | 'TRY';
+  sourceType: 'DIRECT' | 'NEGOTIATION' | 'AUCTION';
+  negotiationId?: string;
+  auctionBidId?: string;
+  addedAt: string;
+  updatedAt: string;
+  product?: Product;
+  negotiation?: Negotiation;
+}
+
+// Negotiation types
+export interface Negotiation {
+  id: string;
+  productId: string;
+  buyerId: string;
+  sellerId: string;
+  buyerOffer: number;
+  sellerCounterOffer?: number;
+  status: NegotiationStatus;
+  buyerMessage?: string;
+  sellerMessage?: string;
+  expiresAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  product?: Product;
+  buyer?: User;
+  seller?: User;
+}
+
+export type NegotiationStatus = 
+  | 'PENDING'           // Buyer sent initial offer
+  | 'COUNTERED'         // Seller sent counter-offer
+  | 'ACCEPTED'          // Buyer accepted counter-offer
+  | 'DECLINED'          // Buyer declined counter-offer
+  | 'EXPIRED'           // Negotiation expired
+  | 'CANCELLED';        // Cancelled by either party
+
+// Cart and Negotiation API types
+export interface AddToCartData {
+  productId: string;
+  quantity: number;
+  sourceType?: 'DIRECT' | 'NEGOTIATION' | 'AUCTION';
+  priceOverride?: number;
+  metadata?: {
+    negotiationId?: string;
+    auctionBidId?: string;
+  };
+}
+
+export interface UpdateCartItemData {
+  quantity: number;
+}
+
+export interface CreateNegotiationData {
+  productId: string;
+  buyerOffer: number;
+  buyerMessage?: string;
+}
+
+export interface CounterOfferData {
+  counterOffer: number;
+  sellerMessage?: string;
+}
+
+// Cart summary types
+export interface CartSummary {
+  itemCount: number;
+  totalQuantity: number;
+  totalValue: number;
+  currencies: string[];
+}
+
+// Socket event types
+export interface CartSocketEvents {
+  'cart_item_added': CartItem;
+  'cart_item_updated': CartItem;
+  'cart_item_removed': { itemId: string };
+  'cart_item_unavailable': { itemId: string; product: Product; reason: string };
+  'cart_cleared': { count: number };
+  'cart_updated': { itemId?: string; action: string };
+}
+
+export interface NegotiationSocketEvents {
+  'negotiation_created': Negotiation;
+  'counter_offer_received': Negotiation;
+  'negotiation_accepted': Negotiation;
+  'negotiation_declined': Negotiation;
+  'negotiation_cancelled': Negotiation;
+  'negotiation_expired': Negotiation;
+}

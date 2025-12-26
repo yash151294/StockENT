@@ -8,6 +8,8 @@ const auctionRoutes = require('./auctions');
 const messageRoutes = require('./messages');
 const adminRoutes = require('./admin');
 const dashboardRoutes = require('./dashboard');
+const cartRoutes = require('./cart');
+const negotiationRoutes = require('./negotiations');
 
 const router = express.Router();
 
@@ -31,5 +33,7 @@ router.use('/auctions', auctionRoutes);
 router.use('/messages', messageRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/admin', adminRoutes);
+router.use('/cart', cartRoutes);
+router.use('/negotiations', negotiationRoutes);
 
 module.exports = router;

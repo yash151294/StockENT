@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const {
   sendVerificationEmail,
   sendPasswordResetEmail,
@@ -11,7 +11,7 @@ const {
   getGoogleAuthUrl,
 } = require('../services/googleAuthService');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 /**
  * Register a new user

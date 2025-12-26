@@ -1,9 +1,9 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('./prisma');
 const { logger } = require('./logger');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 /**
  * Socket.IO server instance
@@ -127,6 +127,34 @@ const initSocket = (server) => {
       socket.leave(`conversation:${conversationId}`);
       logger.info(
         `User ${socket.user.email} left conversation room: ${conversationId}`
+      );
+    });
+
+    // Handle joining cart room
+    socket.on('join_cart', () => {
+      socket.join(`cart:${socket.user.id}`);
+      logger.info(`User ${socket.user.email} joined cart room`);
+    });
+
+    // Handle leaving cart room
+    socket.on('leave_cart', () => {
+      socket.leave(`cart:${socket.user.id}`);
+      logger.info(`User ${socket.user.email} left cart room`);
+    });
+
+    // Handle joining negotiation room
+    socket.on('join_negotiation', (negotiationId) => {
+      socket.join(`negotiation:${negotiationId}`);
+      logger.info(
+        `User ${socket.user.email} joined negotiation room: ${negotiationId}`
+      );
+    });
+
+    // Handle leaving negotiation room
+    socket.on('leave_negotiation', (negotiationId) => {
+      socket.leave(`negotiation:${negotiationId}`);
+      logger.info(
+        `User ${socket.user.email} left negotiation room: ${negotiationId}`
       );
     });
 
@@ -361,6 +389,7 @@ const initSocket = (server) => {
             auctionId,
             bidderId: socket.user.id,
             amount: parseFloat(amount),
+            quantity: 1, // Default quantity for socket bids
             status: 'ACTIVE',
           },
           include: {
@@ -679,6 +708,38 @@ const getUsersInRoom = (room) => {
 };
 
 /**
+ * Emit to cart room
+ */
+const emitToCart = (userId, event, data) => {
+  try {
+    if (!io) {
+      logger.warn('Socket.IO server not initialized');
+      return;
+    }
+    io.to(`cart:${userId}`).emit(event, data);
+    logger.debug(`Emitted ${event} to cart:${userId}`, data);
+  } catch (error) {
+    logger.error(`Failed to emit ${event} to cart:${userId}:`, error);
+  }
+};
+
+/**
+ * Emit to negotiation room
+ */
+const emitToNegotiation = (negotiationId, event, data) => {
+  try {
+    if (!io) {
+      logger.warn('Socket.IO server not initialized');
+      return;
+    }
+    io.to(`negotiation:${negotiationId}`).emit(event, data);
+    logger.debug(`Emitted ${event} to negotiation:${negotiationId}`, data);
+  } catch (error) {
+    logger.error(`Failed to emit ${event} to negotiation:${negotiationId}:`, error);
+  }
+};
+
+/**
  * Close Socket.IO server
  */
 const closeSocket = () => {
@@ -697,6 +758,8 @@ module.exports = {
   emitToProduct,
   emitToAuction,
   emitToConversation,
+  emitToCart,
+  emitToNegotiation,
   broadcast,
   getConnectedUsersCount,
   getUsersInRoom,

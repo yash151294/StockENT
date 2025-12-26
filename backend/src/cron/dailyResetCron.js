@@ -1,8 +1,8 @@
 const cron = require('node-cron');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const { logger } = require('../utils/logger');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 const resetFirstLoginStatusJob = cron.schedule(
   '0 0 * * *', // Run daily at midnight

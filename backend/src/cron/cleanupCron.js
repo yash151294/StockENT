@@ -1,9 +1,9 @@
 const cron = require('node-cron');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const { logger } = require('../utils/logger');
 const { cleanupEmptyConversations, cleanupOldEmptyConversations, cleanupAbandonedConversations } = require('../services/messageService');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 const cleanupRefreshTokensJob = cron.schedule(
   '0 0 * * *',

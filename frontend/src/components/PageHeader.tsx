@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import { ArrowBack } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 
 interface PageHeaderProps {
   title: string;
@@ -20,13 +20,13 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   onBackClick,
   noTopSpacing = false
 }) => {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const handleBackClick = () => {
     if (onBackClick) {
       onBackClick();
     } else {
-      navigate(backPath);
+      router.push(backPath);
     }
   };
 

@@ -1,8 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const { logger } = require('../utils/logger');
 const { sendMessageNotification } = require('./emailService');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 
 /**
  * Create a new conversation (DEPRECATED - Use sendMessageWithConversation instead)

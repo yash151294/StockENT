@@ -27,21 +27,6 @@ export const useConversations = () => {
 
   const allConversations = conversationsResponse?.data?.data?.conversations || [];
   
-  // Debug logging
-  console.log('🔍 useConversations Debug:', {
-    isAuthenticated: state.isAuthenticated,
-    isLoading,
-    error,
-    responseData: conversationsResponse?.data?.data,
-    allConversationsCount: allConversations.length,
-    allConversations: allConversations.map(conv => ({
-      id: conv.id,
-      productTitle: conv.product?.title,
-      messageCount: conv._count?.messages,
-      hasMessages: conv._count?.messages && conv._count.messages > 0
-    }))
-  });
-  
   // Include conversations that have messages OR are recently created (within last 5 minutes)
   const conversations = allConversations.filter((conv: any) => {
     const hasMessages = conv._count?.messages && conv._count.messages > 0;
@@ -53,49 +38,34 @@ export const useConversations = () => {
   const hasConversations = conversations.length > 0;
   const conversationCount = conversations.length;
 
-  console.log('🔍 Filtered Results:', {
-    hasConversations,
-    conversationCount,
-    conversationsWithMessages: conversations.length,
-    allConversationsCount: allConversations.length,
-    filteredConversations: conversations.map(conv => ({
-      id: conv.id,
-      productTitle: conv.product?.title,
-      messageCount: conv._count?.messages
-    })),
-    timestamp: new Date().toISOString()
-  });
+  // Only log debug info in development and when there are actual changes
+  // Removed excessive logging to reduce console noise
 
   // Real-time socket event handling for conversations
   useEffect(() => {
     if (socket) {
       const handleNewMessage = (message: any) => {
-        console.log('📨 New message received in useConversations:', message);
         // Refresh conversations to update last message and unread count
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       };
 
       const handleMessageNotification = (data: any) => {
-        console.log('🔔 Message notification in useConversations:', data);
         // Refresh conversations to update unread count
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
         // Note: Notification handling is done by NotificationContext
       };
 
       const handleMessageDeleted = (data: any) => {
-        console.log('🗑️ Message deleted in useConversations:', data);
         // Refresh conversations to update message count
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       };
 
       const handleConversationClosed = (data: any) => {
-        console.log('🔒 Conversation closed in useConversations:', data);
         // Refresh conversations to update conversation status
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       };
 
       const handleConversationCreated = (conversation: any) => {
-        console.log('✨ New conversation created in useConversations:', conversation);
         // Refresh conversations to include new conversation
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
       };
@@ -119,7 +89,6 @@ export const useConversations = () => {
 
   // Function to completely refresh conversation data
   const refreshConversations = async () => {
-    console.log('🔄 Force refreshing conversations...');
     // Remove from cache completely
     queryClient.removeQueries({ queryKey: ['conversations'] });
     // Refetch

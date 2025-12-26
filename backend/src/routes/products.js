@@ -38,8 +38,8 @@ const router = express.Router();
  */
 router.get('/tags', [apiLimiter], async (req, res) => {
   try {
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
+    const { getPrismaClient } = require('../utils/prisma');
+    const prisma = getPrismaClient();
     const { logger } = require('../utils/logger');
 
     // Get all unique tags from active products
@@ -82,8 +82,8 @@ router.get('/tags', [apiLimiter], async (req, res) => {
  */
 router.get('/specifications', [apiLimiter], async (req, res) => {
   try {
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
+    const { getPrismaClient } = require('../utils/prisma');
+    const prisma = getPrismaClient();
     const { logger } = require('../utils/logger');
 
     // Get all specifications from active products

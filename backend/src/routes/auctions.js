@@ -107,8 +107,8 @@ router.post(
   [authenticateToken, bidLimiter, validate],
   async (req, res) => {
     try {
-      const { amount } = req.body;
-      const bid = await placeBid(req.params.id, req.user.id, amount);
+      const { amount, quantity = 1 } = req.body;
+      const bid = await placeBid(req.params.id, req.user.id, amount, quantity);
       res.status(201).json({
         success: true,
         data: bid,

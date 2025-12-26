@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import {
   AppBar,
@@ -24,7 +26,7 @@ import {
   Search,
   Close,
 } from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useNotification } from '../contexts/NotificationContext';
@@ -34,14 +36,16 @@ import RoleChip from './RoleChip';
 import Logo from './Logo';
 import Footer from './Footer';
 import NotificationDropdown from './NotificationDropdown';
+import { CartButton } from './cart/CartButton';
+import { CartDrawer } from './cart/CartDrawer';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
   const { state, logout } = useAuth();
   const { t, currentLanguage, setLanguage, availableLanguages } = useLanguage();
   const { showSuccess } = useNotification();
@@ -52,6 +56,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageMenuAnchor, setLanguageMenuAnchor] = useState<null | HTMLElement>(null);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   const handleMobileMenuToggle = () => {
     setMobileMenuOpen(!mobileMenuOpen);
@@ -82,13 +87,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setLanguageMenuAnchor(null);
   };
 
+  const handleCartDrawerToggle = () => {
+    setCartDrawerOpen(!cartDrawerOpen);
+  };
+
+  const handleCartDrawerClose = () => {
+    setCartDrawerOpen(false);
+  };
+
 
 
   const handleLogout = async () => {
     try {
       await logout();
       showSuccess('You have been logged out successfully');
-      navigate('/');
+      router.push('/');
       handleProfileMenuClose();
     } catch (error) {
       console.error('Logout error:', error);
@@ -172,13 +185,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     <Button
                       key={item.path}
                       color="inherit"
-                      onClick={() => navigate(item.path)}
+                      onClick={() => router.push(item.path)}
                       sx={{
                         textTransform: 'none',
-                        fontWeight: location.pathname === item.path ? 600 : 500,
+                        fontWeight: pathname === item.path ? 600 : 500,
                         px: 2,
                         py: 1,
-                        backgroundColor: location.pathname === item.path ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                        backgroundColor: pathname === item.path ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                         '&:hover': {
                           backgroundColor: 'rgba(255, 255, 255, 0.1)',
                         }
@@ -199,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             gap: 1,
           }}>
             {/* Search Button */}
-            <IconButton color="inherit" onClick={() => navigate('/products')} sx={{ mr: 1 }}>
+            <IconButton color="inherit" onClick={() => router.push('/products')} sx={{ mr: 1 }}>
               <Search />
             </IconButton>
 
@@ -208,7 +221,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <Box sx={{ display: 'flex', alignItems: 'center', mr: 1 }}>
                 <RoleChip 
                   onRoleChange={() => {
-                    navigate('/dashboard');
+                    router.push('/dashboard');
                   }}
                   sx={{ 
                     backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -225,6 +238,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Notifications */}
             {state.isAuthenticated && (
               <NotificationDropdown />
+            )}
+
+            {/* Cart Button - Only for Buyers */}
+            {state.isAuthenticated && state.user?.role === 'BUYER' && (
+              <CartButton 
+                onClick={handleCartDrawerToggle}
+                color="inherit"
+              />
             )}
 
             {/* Language Selector */}
@@ -279,7 +300,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   open={Boolean(anchorEl)}
                   onClose={handleProfileMenuClose}
                 >
-                  <MenuItem onClick={() => { navigate('/profile'); handleProfileMenuClose(); }}>
+                  <MenuItem onClick={() => { router.push('/profile'); handleProfileMenuClose(); }}>
                     <ListItemIcon>
                       <Person fontSize="small" />
                     </ListItemIcon>
@@ -295,10 +316,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </>
             ) : (
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button color="inherit" onClick={() => navigate('/login')}>
+                <Button color="inherit" onClick={() => router.push('/login')}>
                   {t('auth.login')}
                 </Button>
-                <Button color="inherit" onClick={() => navigate('/register')}>
+                <Button color="inherit" onClick={() => router.push('/register')}>
                   {t('auth.register')}
                 </Button>
               </Box>
@@ -373,10 +394,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   key={item.path}
                   button
                   onClick={() => {
-                    navigate(item.path);
+                    router.push(item.path);
                     handleMobileMenuClose();
                   }}
-                  selected={location.pathname === item.path}
+                  selected={pathname === item.path}
                   sx={{
                     borderRadius: 2,
                     mb: 1,
@@ -388,8 +409,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <ListItemText 
                     primary={item.label}
                     primaryTypographyProps={{
-                      fontWeight: location.pathname === item.path ? 600 : 500,
-                      color: location.pathname === item.path ? '#6366F1' : 'inherit',
+                      fontWeight: pathname === item.path ? 600 : 500,
+                      color: pathname === item.path ? '#6366F1' : 'inherit',
                     }}
                   />
                 </ListItem>
@@ -417,6 +438,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Footer */}
       <Footer />
+
+      {/* Cart Drawer */}
+      <CartDrawer 
+        open={cartDrawerOpen}
+        onClose={handleCartDrawerClose}
+      />
     </Box>
   );
 };

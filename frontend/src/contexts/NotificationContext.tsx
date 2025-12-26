@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
@@ -222,19 +224,21 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   // Socket event handlers for real-time notifications
   useEffect(() => {
-    console.log('🔧 NotificationContext useEffect triggered:', { 
-      isAuthenticated: state.isAuthenticated, 
-      hasSocket: !!socket, 
-      isConnected,
-      userId: state.user?.id
-    });
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 NotificationContext useEffect triggered:', { 
+        isAuthenticated: state.isAuthenticated, 
+        hasSocket: !!socket, 
+        isConnected,
+        userId: state.user?.id
+      });
+    }
     if (state.isAuthenticated && socket && isConnected) {
       const handleMessageReceived = (message: any) => {
-        console.log('📨 Message received event:', message);
-        console.log('🔍 Message sender ID:', message.senderId);
-        console.log('🔍 Current user ID:', state.user?.id);
-        console.log('🔍 MessagesPage active:', isMessagesPageActive);
-        console.log('🔍 User role:', state.user?.role);
+        // Only log in development mode
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📨 Message received event:', message);
+        }
         
         // Apply role-based filtering
         const shouldShowNotification = (() => {
@@ -256,10 +260,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
           }
         })();
         
-        console.log('🔍 Should show notification:', shouldShowNotification);
-        
         if (shouldShowNotification) {
-          console.log('✅ Processing message from different user (MessagesPage not active)');
           setNotifications(prev => {
             const existingNotificationIndex = prev.findIndex(
               n => n.type === 'message' && n.data.senderId === message.senderId
@@ -320,16 +321,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       };
 
       const handleNewMessageNotification = (data: any) => {
-        console.log('🔔 New message notification event:', data);
-        console.log('🚀 handleNewMessageNotification function called!');
-        console.log('🔍 Function execution started');
+        // Only log in development mode
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔔 New message notification event:', data);
+        }
         
         // Extract message from the notification data structure
         const message = data.message;
-        console.log('🔍 Extracted message:', message);
-        console.log('🔍 Current user ID:', state.user?.id);
-        console.log('🔍 Message sender ID:', message?.senderId);
-        console.log('🔍 User role:', state.user?.role);
         
         // Apply role-based filtering
         const shouldShowNotification = (() => {
@@ -351,23 +349,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
           }
         })();
         
-        console.log('🔍 Should show notification:', shouldShowNotification);
-        
         if (!shouldShowNotification) {
-          console.log('❌ Message filtered out - role-based filtering or other conditions not met');
           return;
         }
         
         // Use the same logic as handleMessageReceived
         setNotifications(prev => {
-          console.log('🔍 Current notifications before processing:', prev.length);
           const existingNotificationIndex = prev.findIndex(
             n => n.type === 'message' && n.data.senderId === message.senderId
           );
-          console.log('🔍 Existing notification index:', existingNotificationIndex);
 
           if (existingNotificationIndex >= 0) {
-            console.log('📝 Updating existing notification');
             // Update existing notification
             const existing = prev[existingNotificationIndex];
             const newUnreadCount = (existing.data.unreadCount || 0) + 1;
@@ -390,18 +382,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
             const newNotifications = [...prev];
             newNotifications[existingNotificationIndex] = updatedNotification;
-            console.log('✅ Updated notification:', updatedNotification);
             return newNotifications;
           } else {
-            console.log('🆕 Creating new notification');
             // Create new notification for this sender
             const notificationId = `user_msg_${message.senderId}`;
-            console.log('🔍 Notification ID:', notificationId);
-            console.log('🔍 Dismissed notifications:', Array.from(dismissedNotificationIdsRef.current));
-            console.log('🔍 Is notification dismissed?', dismissedNotificationIdsRef.current.has(notificationId));
             
             // Always create new notifications - don't block based on previous dismissal
-            console.log('✅ Creating new notification (ignoring previous dismissal)');
             const notification: Notification = {
               id: notificationId,
               type: 'message',
@@ -423,7 +409,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
               },
             };
 
-            console.log('✅ Created new notification:', notification);
             return [notification, ...prev].slice(0, 50);
           }
         });
@@ -456,14 +441,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
         addNotification(notification);
       };
 
-      console.log('🔌 Registering socket event listeners in NotificationContext');
       socket.on('message_received', handleMessageReceived);
       socket.on('new_message_notification', handleNewMessageNotification);
       socket.on('auction_activity', handleAuctionActivity);
       socket.on('bid_placed', handleAuctionActivity);
       socket.on('auction_started', handleAuctionActivity);
       socket.on('auction_ended', handleAuctionActivity);
-      console.log('✅ Socket event listeners registered in NotificationContext');
 
       return () => {
         socket.off('message_received', handleMessageReceived);

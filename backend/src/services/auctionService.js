@@ -1,16 +1,15 @@
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const { logger } = require('../utils/logger');
 const { sendAuctionNotification } = require('./emailService');
 const { broadcast, emitToAuction } = require('../utils/socket');
-
-const prisma = new PrismaClient();
 
 /**
  * Start an auction
  */
 const startAuction = async (auctionId) => {
   try {
-    const auction = await prisma.auction.findUnique({
+    const prismaClient = getPrismaClient();
+    const auction = await prismaClient.auction.findUnique({
       where: { id: auctionId },
       include: {
         product: {
@@ -30,7 +29,7 @@ const startAuction = async (auctionId) => {
     }
 
     // Update auction status
-    const updatedAuction = await prisma.auction.update({
+    const updatedAuction = await getPrismaClient().auction.update({
       where: { id: auctionId },
       data: {
         status: 'ACTIVE',
@@ -39,7 +38,7 @@ const startAuction = async (auctionId) => {
     });
 
     // Update product status
-    await prisma.product.update({
+    await getPrismaClient().product.update({
       where: { id: auction.productId },
       data: { status: 'ACTIVE' },
     });
@@ -103,7 +102,7 @@ const startAuction = async (auctionId) => {
  */
 const endAuction = async (auctionId) => {
   try {
-    const auction = await prisma.auction.findUnique({
+    const auction = await getPrismaClient().auction.findUnique({
       where: { id: auctionId },
       include: {
         product: {
@@ -135,7 +134,7 @@ const endAuction = async (auctionId) => {
       (winningBid && winningBid.amount >= auction.reservePrice);
 
     // Update auction status
-    const updatedAuction = await prisma.auction.update({
+    const updatedAuction = await getPrismaClient().auction.update({
       where: { id: auctionId },
       data: {
         status: 'ENDED',
@@ -144,26 +143,39 @@ const endAuction = async (auctionId) => {
     });
 
     // Update product status
-    await prisma.product.update({
+    await getPrismaClient().product.update({
       where: { id: auction.productId },
       data: {
         status: isReserveMet ? 'SOLD' : 'ACTIVE',
       },
     });
 
-    // Create order if auction was successful
+    // Add winning bid to cart if auction was successful
     if (isReserveMet && winningBid) {
-      await prisma.order.create({
-        data: {
-          productId: auction.productId,
-          buyerId: winningBid.bidderId,
-          sellerId: auction.product.sellerId,
-          price: winningBid.amount,
-          quantity: 1, // Assuming 1 unit per auction
-          status: 'PENDING',
-          orderType: 'AUCTION',
-        },
-      });
+      const cartService = require('./cartService');
+      try {
+        const cartItem = await cartService.addToCart(
+          winningBid.bidderId,
+          auction.productId,
+          auction.product.minOrderQuantity, // Use minimum order quantity
+          'AUCTION',
+          winningBid.amount,
+          { auctionBidId: winningBid.id }
+        );
+
+        // Update cart item with auction bid reference
+        await getPrismaClient().cartItem.update({
+          where: { id: cartItem.id },
+          data: { auctionBidId: winningBid.id },
+        });
+
+        // Note: CartItem already has auctionBidId set above, no need to update Bid's backref
+
+        logger.info(`Auction winner's bid added to cart: ${cartItem.id} for auction: ${auctionId}`);
+      } catch (cartError) {
+        logger.error('Failed to add auction winner to cart:', cartError);
+        // Continue processing even if cart addition fails
+      }
 
       // Send notification to winner
       try {
@@ -251,9 +263,9 @@ const endAuction = async (auctionId) => {
 /**
  * Place a bid on an auction
  */
-const placeBid = async (auctionId, bidderId, amount) => {
+const placeBid = async (auctionId, bidderId, amount, quantity = 1) => {
   try {
-    const auction = await prisma.auction.findUnique({
+    const auction = await getPrismaClient().auction.findUnique({
       where: { id: auctionId },
       include: {
         product: {
@@ -285,9 +297,12 @@ const placeBid = async (auctionId, bidderId, amount) => {
       throw new Error('Sellers cannot bid on their own auctions');
     }
 
-    // Check minimum bid
-    if (amount < auction.minimumBid) {
-      throw new Error(`Bid must be at least $${auction.minimumBid}`);
+    // Note: Quantity validation is removed for bidding
+    // Bids are price per unit only, quantity will be selected in cart
+
+    // Check minimum bid (using startingPrice from schema)
+    if (amount < auction.startingPrice) {
+      throw new Error(`Bid must be at least $${auction.startingPrice}`);
     }
 
     // Check if bid is higher than current highest bid
@@ -299,17 +314,18 @@ const placeBid = async (auctionId, bidderId, amount) => {
     }
 
     // Create bid
-    const bid = await prisma.bid.create({
+    const bid = await getPrismaClient().bid.create({
       data: {
         auctionId,
         bidderId,
         amount,
+        quantity,
         status: 'ACTIVE',
       },
     });
 
-    // Update auction current bid
-    await prisma.auction.update({
+    // Update auction current bid (no quantity change for bids)
+    await getPrismaClient().auction.update({
       where: { id: auctionId },
       data: {
         currentBid: amount,
@@ -319,8 +335,15 @@ const placeBid = async (auctionId, bidderId, amount) => {
       },
     });
 
+    // Emit real-time updates
+    emitToAuction(auctionId, 'bid_placed', {
+      bid,
+      auctionId,
+      currentBid: amount,
+    });
+
     logger.info(
-      `Bid placed: ${bid.id} for auction: ${auctionId}, amount: $${amount}`
+      `Bid placed: ${bid.id} for auction: ${auctionId}, amount: $${amount}, quantity: ${quantity}`
     );
     return bid;
   } catch (error) {
@@ -334,7 +357,7 @@ const placeBid = async (auctionId, bidderId, amount) => {
  */
 const getAuctionDetails = async (auctionId) => {
   try {
-    const auction = await prisma.auction.findUnique({
+    const auction = await getPrismaClient().auction.findUnique({
       where: { id: auctionId },
       include: {
         product: {
@@ -454,7 +477,7 @@ const getActiveAuctions = async (filters = {}) => {
     orderBy[sortBy] = sortOrder;
 
     const [auctions, total] = await Promise.all([
-      prisma.auction.findMany({
+      getPrismaClient().auction.findMany({
         where,
         include: {
           product: {
@@ -493,7 +516,7 @@ const getActiveAuctions = async (filters = {}) => {
         skip,
         take: parseInt(limit),
       }),
-      prisma.auction.count({ where }),
+      getPrismaClient().auction.count({ where }),
     ]);
 
     // Transform the data to match frontend expectations
@@ -540,7 +563,7 @@ const getUserAuctions = async (userId, filters = {}) => {
     }
 
     const [auctions, total] = await Promise.all([
-      prisma.auction.findMany({
+      getPrismaClient().auction.findMany({
         where,
         include: {
           product: {
@@ -571,7 +594,7 @@ const getUserAuctions = async (userId, filters = {}) => {
         skip,
         take: parseInt(limit),
       }),
-      prisma.auction.count({ where }),
+      getPrismaClient().auction.count({ where }),
     ]);
 
     // Transform the data to match frontend expectations
@@ -616,7 +639,7 @@ const getUserBids = async (userId, filters = {}) => {
     }
 
     const [bids, total] = await Promise.all([
-      prisma.bid.findMany({
+      getPrismaClient().bid.findMany({
         where,
         include: {
           auction: {
@@ -653,7 +676,7 @@ const getUserBids = async (userId, filters = {}) => {
         skip,
         take: parseInt(limit),
       }),
-      prisma.bid.count({ where }),
+      getPrismaClient().bid.count({ where }),
     ]);
 
     // Transform auction data to match frontend expectations
@@ -688,10 +711,11 @@ const getUserBids = async (userId, filters = {}) => {
  */
 const processScheduledAuctions = async () => {
   try {
+    const prismaClient = getPrismaClient();
     const now = new Date();
 
     // Start scheduled auctions
-    const scheduledAuctions = await prisma.auction.findMany({
+    const scheduledAuctions = await prismaClient.auction.findMany({
       where: {
         status: 'SCHEDULED',
         startTime: {
@@ -709,7 +733,7 @@ const processScheduledAuctions = async () => {
     }
 
     // End active auctions
-    const activeAuctions = await prisma.auction.findMany({
+    const activeAuctions = await prismaClient.auction.findMany({
       where: {
         status: 'ACTIVE',
         endTime: {
@@ -759,7 +783,7 @@ const processScheduledAuctions = async () => {
  */
 const restartAuction = async (auctionId, sellerId, customStartTime = null, customEndTime = null) => {
   try {
-    const auction = await prisma.auction.findUnique({
+    const auction = await getPrismaClient().auction.findUnique({
       where: { id: auctionId },
       include: {
         product: {
@@ -813,7 +837,7 @@ const restartAuction = async (auctionId, sellerId, customStartTime = null, custo
     }
 
     // Update auction with new times and reset status
-    const updatedAuction = await prisma.auction.update({
+    const updatedAuction = await getPrismaClient().auction.update({
       where: { id: auctionId },
       data: {
         status: newStatus,
@@ -826,13 +850,13 @@ const restartAuction = async (auctionId, sellerId, customStartTime = null, custo
     });
 
     // Update product status to ACTIVE
-    await prisma.product.update({
+    await getPrismaClient().product.update({
       where: { id: auction.productId },
       data: { status: 'ACTIVE' },
     });
 
     // Clear all previous bids
-    await prisma.bid.deleteMany({
+    await getPrismaClient().bid.deleteMany({
       where: { auctionId: auctionId },
     });
 
@@ -901,7 +925,7 @@ const sendEndingSoonNotifications = async () => {
     const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
     // Find auctions ending in the next hour
-    const endingSoonAuctions = await prisma.auction.findMany({
+    const endingSoonAuctions = await getPrismaClient().auction.findMany({
       where: {
         status: 'ACTIVE',
         endTime: {

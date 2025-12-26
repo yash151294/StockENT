@@ -1,6 +1,8 @@
 const { startCronJobs, stopCronJobs } = require('./auctionCron');
 const { startCleanupJobs, stopCleanupJobs } = require('./cleanupCron');
 const { startDailyResetJobs, stopDailyResetJobs } = require('./dailyResetCron');
+const { startNegotiationExpiryCron, stopNegotiationExpiryCron } = require('./negotiationCron');
+const { startCartCleanupCron, stopCartCleanupCron } = require('./cartCron');
 const { logger } = require('../utils/logger');
 
 const startAllCronJobs = () => {
@@ -8,6 +10,8 @@ const startAllCronJobs = () => {
     startCronJobs();
     startCleanupJobs();
     startDailyResetJobs();
+    startNegotiationExpiryCron();
+    startCartCleanupCron();
     logger.info('All cron jobs started successfully');
   } catch (error) {
     logger.error('Failed to start cron jobs:', error);
@@ -19,6 +23,8 @@ const stopAllCronJobs = () => {
     stopCronJobs();
     stopCleanupJobs();
     stopDailyResetJobs();
+    stopNegotiationExpiryCron();
+    stopCartCleanupCron();
     logger.info('All cron jobs stopped successfully');
   } catch (error) {
     logger.error('Failed to stop cron jobs:', error);

@@ -141,3 +141,11 @@ Thumbs.db
 
 # Task runner cache
 .task/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Uploaded files (use cloud storage in production)
+backend/uploads/products/*.jpg
+backend/uploads/products/*.jpeg
+backend/uploads/products/*.png

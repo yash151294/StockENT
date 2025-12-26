@@ -45,6 +45,9 @@ model User {
   wonAuctions      Auction[] @relation("AuctionWinner")
   keyExchangesFrom KeyExchange[] @relation("KeyExchangeFrom")
   keyExchangesTo   KeyExchange[] @relation("KeyExchangeTo")
+  cartItems        CartItem[]
+  negotiationsAsBuyer Negotiation[] @relation("NegotiationBuyer")
+  negotiationsAsSeller Negotiation[] @relation("NegotiationSeller")
 
   @@map("users")
 }
@@ -148,6 +151,8 @@ model Product {
   conversations  Conversation[]
   watchlistItems WatchlistItem[]
   sampleRequests SampleRequest[]
+  cartItems      CartItem[]
+  negotiations   Negotiation[]
 
   @@map("products")
 }
@@ -210,14 +215,16 @@ model Bid {
   auctionId   String
   bidderId    String
   amount      Float
+  quantity    Float    @default(1) // Quantity being bid on
   isAutomatic Boolean  @default(false)
   maxBid      Float?
   status      BidStatus @default(ACTIVE)
   createdAt   DateTime @default(now())
 
   // Relations
-  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
-  bidder  User    @relation(fields: [bidderId], references: [id])
+  auction  Auction   @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bidder   User      @relation(fields: [bidderId], references: [id])
+  cartItem CartItem?
 
   @@map("bids")
 }
@@ -342,6 +349,53 @@ model Notification {
   @@map("notifications")
 }
 
+model CartItem {
+  id                String         @id @default(cuid())
+  userId            String
+  productId         String
+  quantity          Float
+  priceAtAddition   Float          // Lock price when added
+  currency          Currency
+  sourceType        CartItemSource @default(DIRECT) // DIRECT, NEGOTIATION, AUCTION
+  negotiationId     String?        // Reference if from negotiation
+  auctionBidId      String?        @unique // Reference if from auction bid
+  addedAt           DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  negotiation Negotiation? @relation(fields: [negotiationId], references: [id])
+  auctionBid  Bid?         @relation(fields: [auctionBidId], references: [id])
+
+  @@unique([userId, productId, sourceType])
+  @@map("cart_items")
+}
+
+model Negotiation {
+  id                 String            @id @default(cuid())
+  productId          String
+  buyerId            String
+  sellerId           String
+  buyerOffer         Float
+  sellerCounterOffer Float?
+  status             NegotiationStatus @default(PENDING)
+  buyerMessage       String?
+  sellerMessage      String?
+  expiresAt          DateTime?         // Linked to product expiry
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  // Relations
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer     User       @relation("NegotiationBuyer", fields: [buyerId], references: [id])
+  seller    User       @relation("NegotiationSeller", fields: [sellerId], references: [id])
+  cartItems CartItem[]
+
+  @@unique([productId, buyerId])
+  @@map("negotiations")
+}
+
 // Enums
 enum UserRole {
   BUYER
@@ -437,4 +491,27 @@ enum NotificationType {
   VERIFICATION_COMPLETE
   PRICE_ALERT
   SYSTEM
+  NEGOTIATION_OFFER
+  NEGOTIATION_COUNTER_OFFER
+  NEGOTIATION_ACCEPTED
+  NEGOTIATION_DECLINED
+  NEGOTIATION_EXPIRED
+  CART_ITEM_ADDED
+  CART_ITEM_REMOVED
+  CART_ITEM_UNAVAILABLE
+}
+
+enum CartItemSource {
+  DIRECT
+  NEGOTIATION
+  AUCTION
+}
+
+enum NegotiationStatus {
+  PENDING           // Buyer sent initial offer
+  COUNTERED         // Seller sent counter-offer
+  ACCEPTED          // Buyer accepted counter-offer
+  DECLINED          // Buyer declined counter-offer
+  EXPIRED           // Negotiation expired
+  CANCELLED         // Cancelled by either party
 }

@@ -6,13 +6,19 @@ const { logger } = require('../utils/logger');
  */
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 1000000 : 100, // Very permissive in development
+  max: process.env.NODE_ENV === 'development' ? 10000000 : 1000, // Much more permissive in development
   message: {
     success: false,
     error: 'Too many requests from this IP, please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for static files, health checks, and in development
+    return process.env.NODE_ENV === 'development' || 
+           req.path.startsWith('/uploads/') || 
+           req.path === '/api/health';
+  },
   handler: (req, res) => {
     logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({
@@ -69,13 +75,19 @@ const passwordResetLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 50000 : 200, // Very permissive in development
+  max: process.env.NODE_ENV === 'development' ? 10000000 : 2000, // Much more permissive in development
   message: {
     success: false,
     error: 'Too many API requests, please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for static files, health checks, and in development
+    return process.env.NODE_ENV === 'development' || 
+           req.path.startsWith('/uploads/') || 
+           req.path === '/api/health';
+  },
   handler: (req, res) => {
     logger.warn(`API rate limit exceeded for IP: ${req.ip}`);
     res.status(429).json({

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
@@ -11,8 +13,14 @@ interface SocketContextType {
   leaveAuction: (auctionId: string) => void;
   joinConversation: (conversationId: string) => void;
   leaveConversation: (conversationId: string) => void;
+  joinUserRoom: (userId: string) => void;
+  leaveUserRoom: (userId: string) => void;
+  joinCart: () => void;
+  leaveCart: () => void;
+  joinNegotiation: (negotiationId: string) => void;
+  leaveNegotiation: (negotiationId: string) => void;
   emitTyping: (conversationId: string, isTyping: boolean) => void;
-  emitBid: (auctionId: string, amount: number) => void;
+  emitBid: (auctionId: string, amount: number, quantity?: number) => void;
   emitMessage: (conversationId: string, content: string, type?: string, encryptionData?: any) => void;
   emitKeyExchange: (conversationId: string, toUserId: string, encryptedAESKey: string, keyId: string, publicKey: string) => void;
   emitKeyExchangeResponse: (keyExchangeId: string, status?: string) => void;
@@ -31,17 +39,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (state.isAuthenticated && !socketRef.current) {
       console.log('Creating new socket connection...');
-      // Get authentication token
-      const token = localStorage.getItem('accessToken') || document.cookie
-        .split('; ')
-        .find(row => row.startsWith('accessToken='))
-        ?.split('=')[1];
-
-      console.log('🔐 Socket auth token:', token ? 'Present' : 'Missing');
+      
+      // For cookie-based authentication, we don't need to manually pass the token
+      // The cookies will be automatically included with withCredentials: true
+      console.log('🔐 Using cookie-based authentication for socket');
 
       // Initialize socket connection
       const newSocket = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001', {
-        auth: { token }, // Send token in auth object
         withCredentials: true, // Enable cookies for authentication
         transports: ['websocket', 'polling'],
       });
@@ -209,6 +213,42 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const joinUserRoom = (userId: string) => {
+    if (socket && isConnected) {
+      socket.emit('join_user_room', userId);
+    }
+  };
+
+  const leaveUserRoom = (userId: string) => {
+    if (socket && isConnected) {
+      socket.emit('leave_user_room', userId);
+    }
+  };
+
+  const joinCart = () => {
+    if (socket && isConnected) {
+      socket.emit('join_cart');
+    }
+  };
+
+  const leaveCart = () => {
+    if (socket && isConnected) {
+      socket.emit('leave_cart');
+    }
+  };
+
+  const joinNegotiation = (negotiationId: string) => {
+    if (socket && isConnected) {
+      socket.emit('join_negotiation', negotiationId);
+    }
+  };
+
+  const leaveNegotiation = (negotiationId: string) => {
+    if (socket && isConnected) {
+      socket.emit('leave_negotiation', negotiationId);
+    }
+  };
+
   const emitTyping = (conversationId: string, isTyping: boolean) => {
     if (socket && isConnected) {
       const event = isTyping ? 'typing_start' : 'typing_stop';
@@ -219,11 +259,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const emitBid = (auctionId: string, amount: number) => {
+  const emitBid = (auctionId: string, amount: number, quantity: number = 1) => {
     if (socket && isConnected) {
       socket.emit('new_bid', {
         auctionId,
         amount,
+        quantity,
         bidderId: state.user?.id,
       });
     }
@@ -268,6 +309,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     leaveAuction,
     joinConversation,
     leaveConversation,
+    joinUserRoom,
+    leaveUserRoom,
+    joinCart,
+    leaveCart,
+    joinNegotiation,
+    leaveNegotiation,
     emitTyping,
     emitBid,
     emitMessage,

@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
@@ -30,6 +32,14 @@ const availableLanguages: Language[] = [
 ];
 
 // Initialize i18next
+// Get initial language safely (SSR-compatible)
+const getInitialLanguage = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('language') || 'en';
+  }
+  return 'en';
+};
+
 i18n
   .use(initReactI18next)
   .init({
@@ -38,7 +48,7 @@ i18n
       zh: { translation: zhTranslations },
       tr: { translation: trTranslations },
     },
-    lng: localStorage.getItem('language') || 'en',
+    lng: getInitialLanguage(),
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
@@ -53,9 +63,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 
 // Provider
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentLanguage, setCurrentLanguage] = useState(
-    localStorage.getItem('language') || 'en'
-  );
+  const [currentLanguage, setCurrentLanguage] = useState(() => getInitialLanguage());
 
   useEffect(() => {
     // Set language in i18next

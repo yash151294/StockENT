@@ -24,7 +24,7 @@ import {
   ClearAll,
   ArrowForward,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useNotifications } from '../contexts/NotificationContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,7 +34,7 @@ interface NotificationDropdownProps {
 }
 
 const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) => {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { notifications, unreadCount, markAsRead, markAllAsRead, markNotificationsViewed, removeNotification, clearAllNotifications } = useNotifications();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
@@ -57,9 +57,9 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
     } else {
       // Default navigation based on notification type
       if (notification.type === 'message' && notification.data.conversationId) {
-        navigate(`/messages?conversation=${notification.data.conversationId}`);
+        router.push(`/messages?conversation=${notification.data.conversationId}`);
       } else if (notification.type === 'auction_activity' && notification.data.auctionId) {
-        navigate(`/auctions/${notification.data.auctionId}`);
+        router.push(`/auctions/${notification.data.auctionId}`);
       }
     }
     handleClose();
@@ -395,7 +395,7 @@ const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onClose }) 
               fullWidth
               variant="outlined"
               onClick={() => {
-                navigate('/notifications');
+                router.push('/notifications');
                 handleClose();
               }}
               sx={{

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from '@mui/material';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useRouter, usePathname } from 'next/navigation';
 
 interface LogoProps {
   size?: number;
@@ -17,13 +17,13 @@ const Logo: React.FC<LogoProps> = ({
   textColor,
   clickable = true
 }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
   const iconSize = size * 0.6;
-  
+
   const handleLogoClick = () => {
-    if (clickable && location.pathname !== '/') {
-      navigate('/');
+    if (clickable && pathname !== '/') {
+      router.push('/');
     }
   };
   
@@ -34,10 +34,10 @@ const Logo: React.FC<LogoProps> = ({
         display: 'flex',
         alignItems: 'center',
         gap: 1.5,
-        cursor: clickable && location.pathname !== '/' ? 'pointer' : 'default',
+        cursor: clickable && pathname !== '/' ? 'pointer' : 'default',
         transition: 'all 0.3s ease',
         '&:hover': {
-          transform: clickable && location.pathname !== '/' ? 'scale(1.05)' : 'none',
+          transform: clickable && pathname !== '/' ? 'scale(1.05)' : 'none',
         },
       }}
     >

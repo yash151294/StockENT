@@ -1,10 +1,10 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { getPrismaClient } = require('../utils/prisma');
 const { authenticateToken } = require('../middleware/auth');
 const { messageLimiter } = require('../middleware/rateLimiter');
 const { validate } = require('../middleware/validation');
 
-const prisma = new PrismaClient();
+const prisma = getPrismaClient();
 const {
   createConversation,
   createOrGetConversation,
