@@ -6,7 +6,7 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage } from '../page-objects/LoginPage';
 import { CartPage, ProductPage } from '../page-objects/CartPage';
-import { TEST_USERS } from '../fixtures/globalSetup';
+import { TEST_USERS } from '../framework/test.context';
 
 test.describe('Cart', () => {
   let loginPage: LoginPage;
@@ -18,25 +18,19 @@ test.describe('Cart', () => {
     cartPage = new CartPage(page);
     productPage = new ProductPage(page);
 
-    // Login before each test with robust retry logic
+    // Login before each test
     await loginPage.goto();
     await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
 
-    // Wait for redirect to dashboard or products with retry mechanism
-    const maxRetries = 2;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Wait for redirect with retry
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await page.waitForURL(/\/(dashboard|products)/, { timeout: 15000 });
-        break; // Success, exit loop
+        break;
       } catch {
-        const currentUrl = page.url();
-        if (attempt < maxRetries && currentUrl.includes('/login')) {
-          // Wait a bit before retrying
+        if (attempt < 2 && page.url().includes('/login')) {
           await page.waitForTimeout(1000);
           await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
-        } else if (attempt === maxRetries) {
-          // Final attempt - just wait longer
-          await page.waitForURL(/\/(dashboard|products)/, { timeout: 20000 });
         }
       }
     }
@@ -49,58 +43,44 @@ test.describe('Cart', () => {
 
     test('should open cart drawer when clicking cart button', async ({ page }) => {
       await cartPage.openCart();
-      // Cart should be visible (either drawer, modal, or page)
     });
 
     test('should navigate to cart page', async ({ page }) => {
-      // Try to navigate to cart - may open drawer instead of separate page
       await cartPage.cartButton.click();
-      // Cart drawer should be visible
       await expect(cartPage.cartDrawer.first()).toBeVisible({ timeout: 5000 });
     });
   });
 
   test.describe('Empty Cart', () => {
     test('should display empty cart message when no items', async ({ page }) => {
-      // Open cart drawer
       await cartPage.cartButton.click();
       await expect(cartPage.cartDrawer.first()).toBeVisible({ timeout: 5000 });
-
-      // Should show empty message (cart starts empty for test user)
       await expect(cartPage.cartEmptyMessage.first()).toBeVisible({ timeout: 5000 });
     });
   });
 
   test.describe('Add to Cart', () => {
     test('should add product to cart from product page', async ({ page }) => {
-      // Navigate to products page
       await page.goto('/products');
 
-      // Click on first product
       const productCard = page.locator('[data-testid="product-card"], .product-card, article').first();
       if (await productCard.isVisible()) {
         await productCard.click();
         await page.waitForLoadState('networkidle');
       }
 
-      // Find add to cart button
       const addButton = page.getByRole('button', { name: /add to cart/i });
       if (await addButton.isVisible()) {
         await addButton.click();
 
-        // Should show success notification or update cart count
         const successNotification = page.locator('text=/added to cart|success/i');
         const cartCountBadge = page.locator('[data-testid="cart-count"], .cart-count, .badge');
 
-        // Either notification appears or cart count updates
-        await expect(
-          successNotification.or(cartCountBadge)
-        ).toBeVisible({ timeout: 5000 });
+        await expect(successNotification.or(cartCountBadge)).toBeVisible({ timeout: 5000 });
       }
     });
 
     test('should update cart count when adding items', async ({ page }) => {
-      // Get initial cart count
       const cartCountBadge = page.locator('[data-testid="cart-count"], .cart-count');
       let initialCount = 0;
 
@@ -109,7 +89,6 @@ test.describe('Cart', () => {
         initialCount = parseInt(countText || '0', 10);
       }
 
-      // Navigate to products and add one
       await page.goto('/products');
       const productCard = page.locator('[data-testid="product-card"], .product-card, article').first();
 
@@ -122,7 +101,6 @@ test.describe('Cart', () => {
           await addButton.click();
           await page.waitForTimeout(1000);
 
-          // Cart count should increase
           if (await cartCountBadge.isVisible()) {
             const newCountText = await cartCountBadge.textContent();
             const newCount = parseInt(newCountText || '0', 10);
@@ -134,9 +112,7 @@ test.describe('Cart', () => {
   });
 
   test.describe('Cart Operations', () => {
-    // These tests assume cart has items
     test.beforeEach(async ({ page }) => {
-      // Add an item to cart first
       await page.goto('/products');
       const productCard = page.locator('[data-testid="product-card"], .product-card, article').first();
 
@@ -154,10 +130,7 @@ test.describe('Cart', () => {
 
     test('should display cart items', async ({ page }) => {
       await cartPage.goto();
-
-      // Should have at least one item
       const items = await cartPage.getItemCount();
-      // Note: This may be 0 if no products exist in the system
       expect(items).toBeGreaterThanOrEqual(0);
     });
 
@@ -172,8 +145,6 @@ test.describe('Cart', () => {
         if (await quantityInput.isVisible()) {
           await quantityInput.fill('25');
           await page.waitForTimeout(1000);
-
-          // Quantity should be updated
           await expect(quantityInput).toHaveValue('25');
         }
       }
@@ -190,15 +161,12 @@ test.describe('Cart', () => {
         if (await removeButton.isVisible()) {
           await removeButton.click();
 
-          // Confirm if needed
           const confirmButton = page.getByRole('button', { name: /confirm|yes/i });
           if (await confirmButton.isVisible()) {
             await confirmButton.click();
           }
 
           await page.waitForTimeout(1000);
-
-          // Item count should decrease
           const newCount = await cartPage.getItemCount();
           expect(newCount).toBeLessThan(initialCount);
         }
@@ -215,15 +183,12 @@ test.describe('Cart', () => {
         if (await clearButton.isVisible()) {
           await clearButton.click();
 
-          // Confirm if needed
           const confirmButton = page.getByRole('button', { name: /confirm|yes/i });
           if (await confirmButton.isVisible()) {
             await confirmButton.click();
           }
 
           await page.waitForTimeout(1000);
-
-          // Cart should be empty
           await cartPage.expectCartEmpty();
         }
       }
@@ -232,7 +197,6 @@ test.describe('Cart', () => {
 
   test.describe('Cart Persistence', () => {
     test('should persist cart items after page refresh', async ({ page }) => {
-      // Add item to cart
       await page.goto('/products');
       const productCard = page.locator('[data-testid="product-card"], .product-card, article').first();
 
@@ -247,21 +211,17 @@ test.describe('Cart', () => {
         }
       }
 
-      // Get cart count
       await cartPage.goto();
       const initialCount = await cartPage.getItemCount();
 
-      // Refresh page
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      // Cart should still have items
       const newCount = await cartPage.getItemCount();
       expect(newCount).toBe(initialCount);
     });
 
     test('should persist cart items after logout and login', async ({ page }) => {
-      // Add item to cart
       await page.goto('/products');
       const productCard = page.locator('[data-testid="product-card"], .product-card, article').first();
 
@@ -276,16 +236,15 @@ test.describe('Cart', () => {
         }
       }
 
-      // Get cart count
       await cartPage.goto();
       const initialCount = await cartPage.getItemCount();
 
       // Logout
+      const userMenu = page.getByRole('button', { name: /profile|account|user/i });
       const logoutButton = page.getByRole('button', { name: /logout|sign out/i }).or(
         page.getByRole('menuitem', { name: /logout|sign out/i })
       );
 
-      const userMenu = page.getByRole('button', { name: /profile|account|user/i });
       if (await userMenu.isVisible()) {
         await userMenu.click();
       }
@@ -298,9 +257,8 @@ test.describe('Cart', () => {
       // Login again
       await loginPage.goto();
       await loginPage.login(TEST_USERS.buyer.email, TEST_USERS.buyer.password);
-      await expect(page).toHaveURL(/\/(dashboard|products)/, { timeout: 10000 });
+      await expect(page).toHaveURL(/\/(dashboard|products)/, { timeout: 15000 });
 
-      // Cart should still have items
       await cartPage.goto();
       const newCount = await cartPage.getItemCount();
       expect(newCount).toBe(initialCount);

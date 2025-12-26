@@ -42,10 +42,7 @@
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.spec.tsx",
     "jest.config.ts",
-    "jest.setup.ts",
-    "e2e/**"
+    "jest.setup.ts"
   ]
 }

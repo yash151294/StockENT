@@ -212,7 +212,7 @@ jobs:
     name: E2E Tests
     needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:15
@@ -252,9 +252,10 @@ jobs:
           npm ci
           cd backend && npm ci
           cd ../frontend && npm ci
+          cd ../acceptance && npm ci
 
       - name: Install Playwright browsers
-        working-directory: frontend
+        working-directory: acceptance
         run: npx playwright install --with-deps chromium
 
       - name: Generate Prisma Client
@@ -278,28 +279,32 @@ jobs:
           PORT: 5001
         run: npm start &
 
-      - name: Wait for backend
+      - name: Start frontend
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:5001/api
+          NEXT_PUBLIC_SOCKET_URL: http://localhost:5001
+        run: npm run dev &
+
+      - name: Wait for services
         run: |
+          echo "Waiting for backend..."
           for i in {1..30}; do
             curl -s http://localhost:5001/api/health && break
             sleep 2
           done
+          echo "Waiting for frontend..."
+          for i in {1..30}; do
+            curl -s http://localhost:3000 && break
+            sleep 2
+          done
+          echo "All services ready"
 
       - name: Run E2E tests
-        working-directory: frontend
+        working-directory: acceptance
         env:
-          PLAYWRIGHT_BASE_URL: http://localhost:3000
-          NEXT_PUBLIC_API_URL: http://localhost:5001/api
-          NEXT_PUBLIC_SOCKET_URL: http://localhost:5001
-        run: npm run e2e -- --project=chromium
-
-      - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: frontend/playwright-report
-          retention-days: 7
+          CI: true
+        run: npx playwright test --project=chromium
 
   # ==========================================================================
   # Deploy to Staging (only on main branch push)

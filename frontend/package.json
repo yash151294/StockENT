@@ -55,10 +55,7 @@
     "type-check": "tsc --noEmit",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "e2e": "playwright test --config=e2e/playwright.config.ts",
-    "e2e:ui": "playwright test --config=e2e/playwright.config.ts --ui",
-    "e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed"
+    "test:coverage": "jest --coverage"
   },
   "eslintConfig": {
     "extends": [
@@ -82,7 +79,6 @@
     ]
   },
   "devDependencies": {
-    "@playwright/test": "^1.57.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@testing-library/user-event": "^14.6.1",
@@ -92,7 +88,6 @@
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "caniuse-lite": "^1.0.30001761",
-    "dotenv": "^17.2.3",
     "eslint": "^8.53.0",
     "eslint-config-next": "^14.2.0",
     "eslint-plugin-react": "^7.33.2",
